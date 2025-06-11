@@ -38,9 +38,10 @@ class InviteMember(BaseModel):
 
 class KnowledgeBaseCreate(BaseModel):
     name: str
+    workspace_id: int
 
 class KnowledgeBaseOut(BaseModel):
-    id: int
+    id: str
     name: str
     file_path: str
     created_at: datetime
@@ -56,8 +57,9 @@ class KnowledgeFileOut(BaseModel):
     id: int
     filename: str
     file_path: str
-    kb_id: int
+    kb_id: str
     uploaded_at: datetime
+    extract_data: Optional[str] = None
 
     class Config:
         from_attributes = True

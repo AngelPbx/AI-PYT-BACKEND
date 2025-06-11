@@ -1,7 +1,10 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, func
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float, ForeignKey, func
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from db.database import Base
+import uuid, enum
+from sqlalchemy import Enum as SqlEnum
+from sqlalchemy.dialects.postgresql import ARRAY
 
 class User(Base):
     __tablename__ = "users"
@@ -59,7 +62,7 @@ class WorkspaceSettings(Base):
 class KnowledgeBase(Base):
     __tablename__ = "knowledge_bases"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(String, primary_key=True, index=True, default=lambda: f"{uuid.uuid4().hex[:16]}")
     name = Column(String, nullable=False)
     file_path = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -70,12 +73,27 @@ class KnowledgeBase(Base):
 
     workspace = relationship("Workspace", back_populates="knowledge_bases")
 
+class FileStatus(str, enum.Enum):
+    pending = "pending"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+
+class SourceStatus(str, enum.Enum):
+    file = "file"
+    url = "url"
+    txt = "txt"
+
 class KnowledgeFile(Base):
     __tablename__ = "knowledge_files"
     id = Column(Integer, primary_key=True, index=True)
-    kb_id = Column(Integer, ForeignKey("knowledge_bases.id"), nullable=False)
+    kb_id = Column(String, ForeignKey("knowledge_bases.id"), nullable=False) 
     filename = Column(String, nullable=False)
-    file_path = Column(String, nullable=False)
+    file_path = Column(String, nullable=True)
+    extract_data = Column(Text, nullable=True)
+    status = Column(SqlEnum(FileStatus), default=FileStatus.pending, nullable=False)
+    source_type = Column(SqlEnum(SourceStatus), default=SourceStatus.file, nullable=False)
+    embedding = Column(ARRAY(Float), nullable=True)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
 
     knowledge_base = relationship("KnowledgeBase")
