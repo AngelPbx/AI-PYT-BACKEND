@@ -5,9 +5,14 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from utils.helpers import format_response
 from routes import router
+from db.database import engine, Base
 
 app = FastAPI()
 app.include_router(router)
+
+
+Base.metadata.drop_all(bind=engine, checkfirst=True)  
+Base.metadata.create_all(bind=engine)
 
 app.mount("/files", StaticFiles(directory="uploads"), name="files")
 
