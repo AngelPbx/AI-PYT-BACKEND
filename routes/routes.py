@@ -1,17 +1,24 @@
-import os
+import os, shutil, fitz
+from docx import Document  #pip install pymupdf python-docx
 from datetime import datetime
 from pathlib import Path
-
-from fastapi import FastAPI, Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter
+from uuid import uuid4
+from io import BytesIO
+from openai import OpenAI
+from fastapi import FastAPI, Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter, BackgroundTasks
 from utils.helpers import is_user_in_workspace, generate_api_key
 from sqlalchemy.orm import Session
 import uuid
+import requests
+from bs4 import BeautifulSoup
+import time
+from sqlalchemy.orm import sessionmaker, Session
 from db.database import get_db, get_current_user
-from models.models import User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, KnowledgeFile, APIKey
+from models.models import User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, KnowledgeFile, APIKey, FileStatus, SourceStatus
 from models.schemas import (
     UserSignup, UserLogin, UpdateUser,
     WorkspaceCreate, WorkspaceOut, InviteMember,
-    WorkspaceSettingsUpdate
+    WorkspaceSettingsUpdate, KnowledgeBaseCreate
 )
 from utils.helpers import (
     format_response, validate_email,
@@ -24,12 +31,16 @@ from utils.security import (
 
 app = FastAPI()
 router = APIRouter()
-
-UPLOAD_DIR = Path("uploads").resolve()
+from db.database import engine, Base
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# UPLOAD_DIR = Path("uploads").resolve()
+# UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads")).resolve()
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 @router.get("/check-username")
+
 def check_username_availability(
     username: str = Query(..., min_length=5, max_length=50),
     db: Session = Depends(get_db)
@@ -143,13 +154,15 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         if not db_user or not verify_password(user.password, db_user.hashed_password):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        token = create_token({"username": db_user.username})
+        token, expire = create_token({"username": db_user.username, "expire_minutes": os.getenv("TOKEN_EXPIRE_MINUTES", 60)})
 
         return format_response(
             status=True,
             message="Login successful",
             data={
                 "token": 'Bearer_' + token,
+                "expires_at": expire.isoformat() + "Z",
+                "expire_duration": int(os.getenv("TOKEN_EXPIRE_MINUTES")),
                 "retall_api_key": db_user.retall_api_key
             }
         )
@@ -159,8 +172,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
-
-@router.put("/user/update")
+@router.patch("/user/update")
 def update_user(
     user_data: UpdateUser,
     db: Session = Depends(get_db),
@@ -237,12 +249,22 @@ def update_user(
                 errors=[{"field": "update", "message": "Nothing to update"}]
             )
 
+        # Update the timestamp
+        existing_user.updated_at = datetime.utcnow()
+
         db.commit()
+        user_response = {
+            "id": existing_user.id,
+            "username": existing_user.username,
+            "email": existing_user.email,
+            "full_name": existing_user.full_name,
+            # Add other fields you want to return here
+        }
 
         return format_response(
             status=True,
             message="User details updated successfully",
-            data={}
+            data=user_response
         )
 
     except Exception as e:
@@ -252,6 +274,98 @@ def update_user(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
+# @router.put("/user/update")
+# def update_user(
+#     user_data: UpdateUser,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     try:
+#         existing_user = db.query(User).filter(User.id == current_user.id).first()
+#         if not existing_user:
+#             return format_response(
+#                 status=False,
+#                 message="User not found",
+#                 errors=[{"field": "user", "message": "User not found"}]
+#             )
+
+#         updated = False
+#         errors = []
+
+#         # Update username
+#         if user_data.username and user_data.username != existing_user.username:
+#             username_exists = db.query(User).filter(User.username == user_data.username).first()
+#             if username_exists:
+#                 errors.append({
+#                     "field": "username",
+#                     "message": "Username already taken"
+#                 })
+#             else:
+#                 existing_user.username = user_data.username
+#                 updated = True
+
+#         # Update email
+#         if user_data.email and user_data.email != existing_user.email:
+#             try:
+#                 validate_email(user_data.email)
+#             except Exception as e:
+#                 errors.append({
+#                     "field": "email",
+#                     "message": str(e)
+#                 })
+#             else:
+#                 email_exists = db.query(User).filter(User.email == user_data.email).first()
+#                 if email_exists:
+#                     errors.append({
+#                         "field": "email",
+#                         "message": "Email already registered"
+#                     })
+#                 else:
+#                     existing_user.email = user_data.email
+#                     updated = True
+
+#         # Update password
+#         if user_data.password:
+#             try:
+#                 validate_password(user_data.password)
+#             except Exception as e:
+#                 errors.append({
+#                     "field": "password",
+#                     "message": str(e)
+#                 })
+#             else:
+#                 existing_user.hashed_password = hash_password(user_data.password)
+#                 updated = True
+
+#         if errors:
+#             return format_response(
+#                 status=False,
+#                 message="Validation or conflict error",
+#                 errors=errors
+#             )
+
+#         if not updated:
+#             return format_response(
+#                 status=False,
+#                 message="No valid fields provided for update",
+#                 errors=[{"field": "update", "message": "Nothing to update"}]
+#             )
+
+#         db.commit()
+
+#         return format_response(
+#             status=True,
+#             message="User details updated successfully",
+#             data={}
+#         )
+
+#     except Exception as e:
+#         db.rollback()
+#         return format_response(
+#             status=False,
+#             message="Internal Server Error",
+#             errors=[{"field": "server", "message": str(e)}]
+#         )
 
 
 @router.get("/user/status")
@@ -655,15 +769,72 @@ def list_kbs(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
-        
-@router.get("/knowledge-bases/{kb_id}")
-def get_knowledge_base(
-    kb_id: int,
+
+# To create a knowledge base, we need to ensure the user is a member of the workspace
+@router.post("/knowledge-bases")
+def create_knowledge_base(
+    kb_data: KnowledgeBaseCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
-        kb = db.query(KnowledgeBase).filter_by(id=kb_id).first()
+        # Validate workspace membership or ownership here
+        membership = db.query(WorkspaceMember).filter_by(
+            workspace_id=kb_data.workspace_id,
+            user_id=current_user.id
+        ).first()
+        if not membership:
+            return format_response(
+                status=False,
+                message="Access denied",
+                errors=[{"field": "workspace_id", "message": "User is not a member of this workspace"}],
+                status_code=403
+            )
+
+        # Generate a unique string ID for the knowledge base
+        # kb_id = uuid4().hex
+        # print(f"Generated KB ID: {kb_id}")
+        print(f"Knowledge Base Data: {kb_data}")
+        kb = KnowledgeBase(
+            # id=kb_id,
+            name=kb_data.name,
+            file_path="",
+            workspace_id=kb_data.workspace_id,
+            created_at=datetime.utcnow(),
+            enable_auto_refresh=False,  # default or configurable
+            last_refreshed=None
+        )
+        db.add(kb)
+        db.commit()
+        db.refresh(kb)
+
+        return format_response(
+            status=True,
+            message="Knowledge base created successfully",
+            data={
+                "id": kb.id,
+                "name": kb.name,
+                "workspace_id": kb.workspace_id,
+                "created_at": kb.created_at.isoformat()
+            }
+        )
+    except Exception as e:
+        db.rollback()
+        return format_response(
+            status=False,
+            message="Internal Server Error",
+            errors=[{"field": "server", "message": str(e)}],
+            status_code=500
+        )
+    
+@router.get("/knowledge-bases/{kb_id}")
+def get_knowledge_base(
+    kb_id: str,  # changed from int to str
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        kb = db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
         if not kb:
             return format_response(
                 status=False,
@@ -672,11 +843,12 @@ def get_knowledge_base(
                 status_code=404
             )
 
-        membership = db.query(WorkspaceMember).filter_by(
+        is_member = db.query(WorkspaceMember).filter_by(
             workspace_id=kb.workspace_id,
             user_id=current_user.id
         ).first()
-        if not membership:
+
+        if not is_member:
             return format_response(
                 status=False,
                 message="Access denied",
@@ -695,12 +867,12 @@ def get_knowledge_base(
         ]
 
         data = {
-            "knowledge_base_id": f"knowledge_base_{kb.id}",
+            "knowledge_base_id": kb.id,
             "knowledge_base_name": kb.name,
             "status": "ready",
             "knowledge_base_sources": sources,
             "enable_auto_refresh": kb.enable_auto_refresh,
-            "last_refreshed_timestamp": int(kb.last_refreshed.timestamp() * 1000)
+            "last_refreshed_timestamp": int(kb.last_refreshed.timestamp() * 1000) if kb.last_refreshed else None
         }
 
         return format_response(
@@ -714,12 +886,18 @@ def get_knowledge_base(
         return format_response(
             status=False,
             message="Internal Server Error",
-            errors=[{"field": "server", "message": str(e)}]
+            errors=[{"field": "server", "message": str(e)}],
+            status_code=500
         )
+       
+from openai import OpenAI
 
-@router.post("/knowledge-bases/{kb_id}/sources")
+# Ensure you initialize OpenAI client
+openai_client = OpenAI()
+
+@router.post("/knowledge-bases/sources")
 async def add_kb_source(
-    kb_id: int,
+    kb_id: str = Form(...),
     source_type: str = Form(...),
     file: UploadFile = File(None),
     url: str = Form(None),
@@ -729,126 +907,267 @@ async def add_kb_source(
     current_user: User = Depends(get_current_user)
 ):
     try:
+        # Validate KB and user membership
         kb = db.query(KnowledgeBase).filter_by(id=kb_id).first()
         if not kb:
-            return format_response(
-                status=False,
-                message="Knowledge base not found",
-                errors=[{"field": "kb_id", "message": "Knowledge base not found"}],
-                status_code=404
-            )
+            return format_response(False, "Knowledge base not found", errors=[{"field": "kb_id"}], status_code=404)
 
-        membership = db.query(WorkspaceMember).filter_by(workspace_id=kb.workspace_id, user_id=current_user.id).first()
-        if not membership:
-            return format_response(
-                status=False,
-                message="Access denied",
-                errors=[{"field": "workspace_id", "message": "User is not a member of this workspace"}],
-                status_code=403
-            )
+        member = db.query(WorkspaceMember).filter_by(workspace_id=kb.workspace_id, user_id=current_user.id).first()
+        if not member:
+            return format_response(False, "Access denied", errors=[{"field": "workspace"}], status_code=403)
 
+        # Directory setup
         kb_path = UPLOAD_DIR / f"workspace_{kb.workspace_id}" / f"knowledge_base_{kb_id}"
         kb_path.mkdir(parents=True, exist_ok=True)
 
-        file_path = None
-        file_name = None
-        source_details = {}
+        # Process content
+        file_path, file_name, extract_text = None, None, ""
 
         if source_type == "file":
             if not file:
-                return format_response(
-                    status=False,
-                    message="No file uploaded",
-                    errors=[{"field": "file", "message": "File required"}]
-                )
-            file_name = f"{uuid.uuid4().hex}_{file.filename}"
+                return format_response(False, "File is required", errors=[{"field": "file"}], status_code=400)
+
+            ext = Path(file.filename).suffix.lower()
+            file_name = f"{uuid4().hex}_{file.filename}"
             file_path = kb_path / file_name
+
             with open(file_path, "wb") as f_out:
                 f_out.write(await file.read())
-            source_details = {
-                "type": "document",
-                "source_id": kb.workspace_id,
-                "filename": file_name,
-                "file_url": str(file_path)
-            }
+
+            if ext == ".pdf":
+                with fitz.open(file_path) as doc:
+                    extract_text = "\n".join(p.get_text() for p in doc)
+            elif ext == ".docx":
+                extract_text = "\n".join(p.text for p in Document(file_path).paragraphs)
+            elif ext == ".txt":
+                extract_text = file_path.read_text(encoding="utf-8")
+            else:
+                return format_response(False, "Unsupported file type", status_code=400)
 
         elif source_type == "web_page":
-            if not url:
-                return format_response(
-                    status=False,
-                    message="No URL provided",
-                    errors=[{"field": "url", "message": "URL is required"}]
-                )
-            file_name = f"web_{uuid.uuid4().hex}.txt"
-            file_path = kb_path / file_name
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(f"Crawled content from {url}")
-            source_details = {
-                "type": "web_page",
-                "source_id": kb.workspace_id,
-                "filename": file_name,
-                "file_url": str(file_path)
-            }
+            if not url or not text_filename:
+                return format_response(False, "URL and filename required", status_code=400)
+            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+            res.raise_for_status()
+            soup = BeautifulSoup(res.text, "html.parser")
+            for tag in soup(["script", "style"]): tag.decompose()
+            extract_text = soup.get_text(separator="\n", strip=True)
+            file_name = text_filename
+            file_path = url
 
-        elif source_type == "text":
+        elif source_type == "txt":
             if not text_filename or not text_content:
-                return format_response(
-                    status=False,
-                    message="Filename and content required",
-                    errors=[{"field": "text", "message": "Both filename and content are required"}]
-                )
-            file_name = f"{uuid.uuid4().hex}_{text_filename}.txt"
+                return format_response(False, "Text filename and content required", status_code=400)
+            file_name = f"{uuid4().hex}_{text_filename}.txt"
             file_path = kb_path / file_name
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(text_content)
-            source_details = {
-                "type": "text",
-                "source_id": kb.workspace_id,
-                "filename": file_name,
-                "file_url": str(file_path)
-            }
+            file_path.write_text(text_content, encoding="utf-8")
+            extract_text = text_content
 
         else:
-            return format_response(
-                status=False,
-                message="Invalid source type",
-                errors=[{"field": "source_type", "message": "Must be one of: file, web_page, text"}],
-                status_code=400
-            )
+            return format_response(False, "Invalid source type", status_code=400)
 
-        # Optionally store source in KnowledgeFile
-        if source_type == "file":
-            kb_file = KnowledgeFile(
-                kb_id=kb.id,
-                filename=file_name,
-                file_path=str(file_path)
-            )
-            db.add(kb_file)
-            db.commit()
-            db.refresh(kb_file)
+        # ✅ Generate Embedding (truncated for safety)
+        clean_text = extract_text.replace("\n", " ").strip()
+        truncated = clean_text[:3000]  # limit tokens for embedding
 
-        return format_response(
-            status=True,
-            message="Knowledge base source added",
-            data=source_details
+        embedding_response = openai_client.embeddings.create(
+            model="text-embedding-3-small",
+            input=truncated
         )
+        embedding_vector = embedding_response.data[0].embedding
+
+        # Save to DB
+        kb_file = KnowledgeFile(
+            kb_id=kb.id,
+            filename=file_name,
+            file_path=str(file_path),
+            extract_data=extract_text,
+            embedding=embedding_vector,  # ➕ store embedding
+            status=FileStatus.completed,
+            source_type=SourceStatus(source_type)
+        )
+        db.add(kb_file)
+        db.commit()
+
+        return format_response(True, "Source added with embedding", data={
+            "source_id": kb_file.id,
+            "filename": file_name,
+            "file_url": str(file_path),
+            "type": source_type,
+        })
 
     except Exception as e:
         db.rollback()
-        return format_response(
-            status=False,
-            message="Internal Server Error",
-            errors=[{"field": "server", "message": str(e)}]
-        )
+        return format_response(False, "Internal Server Error", errors=[{"field": "server", "message": str(e)}], status_code=500)
 
+# @router.post("/knowledge-bases/sources")
+# async def add_kb_source(
+#     kb_id: str,
+#     source_type: str = Form(...),
+#     file: UploadFile = File(None),
+#     url: str = Form(None),
+#     text_filename: str = Form(None),
+#     text_content: str = Form(None),
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     try:
+#         # Validate KB existence
+#         kb = db.query(KnowledgeBase).filter_by(id=kb_id).first()
+#         if not kb:
+#             return format_response(False, "Knowledge base not found", errors=[{"field": "kb_id"}], status_code=404)
+
+#         # Check workspace membership
+#         membership = db.query(WorkspaceMember).filter_by(workspace_id=kb.workspace_id, user_id=current_user.id).first()
+#         if not membership:
+#             return format_response(False, "Access denied", errors=[{"field": "workspace"}], status_code=403)
+
+#         kb_path = UPLOAD_DIR / f"workspace_{kb.workspace_id}" / f"knowledge_base_{kb_id}"
+#         kb_path.mkdir(parents=True, exist_ok=True)
+
+#         source_details = {}
+
+#         if source_type == "file":
+#             if not file:
+#                 return format_response(False, "File is required", errors=[{"field": "file"}], status_code=400)
+
+#             file_name = f"{uuid4().hex}_{file.filename}"
+#             file_path = kb_path / file_name
+#             ext = Path(file.filename).suffix.lower()
+#             extract_text = ""
+
+#             try:
+#                 with open(file_path, "wb") as f_out:
+#                     content = await file.read()
+#                     f_out.write(content)
+
+#                 if ext == ".pdf":
+#                     with fitz.open(file_path) as doc:
+#                         extract_text = "\n".join(page.get_text() for page in doc)
+
+#                 elif ext == ".docx":
+#                     doc = Document(file_path)
+#                     extract_text = "\n".join(p.text for p in doc.paragraphs)
+
+#                 elif ext == ".txt":
+#                     with open(file_path, "r", encoding="utf-8") as f:
+#                         extract_text = f.read()
+#                 else:
+#                     raise ValueError(f"Unsupported file type: {ext}")
+
+#                 kb_file = KnowledgeFile(
+#                     kb_id=kb.id,
+#                     filename=file_name,
+#                     file_path=str(file_path),
+#                     extract_data=extract_text,
+#                     status=FileStatus.completed,
+#                     source_type=SourceStatus.file
+#                 )
+#                 db.add(kb_file)
+#                 db.commit()
+
+#                 source_details = {
+#                     "type": "document",
+#                     "source_id": kb.workspace_id,
+#                     "filename": file_name,
+#                     "file_url": str(file_path)
+#                 }
+
+#             except Exception as e:
+#                 db.rollback()
+#                 if file_path.exists():
+#                     file_path.unlink(missing_ok=True)
+#                 return format_response(False, "File processing failed", errors=[{"field": "file", "message": str(e)}], status_code=400)
+
+#         elif source_type == "web_page":
+#             if not url or not text_filename:
+#                 return format_response(False, "URL and filename required", errors=[{"field": "url"}, {"field": "text_filename"}], status_code=400)
+
+#             try:
+#                 headers = {"User-Agent": "Mozilla/5.0"}
+#                 response = requests.get(url, headers=headers, timeout=10)
+#                 response.raise_for_status()
+#                 soup = BeautifulSoup(response.text, "html.parser")
+
+#                 for tag in soup(["script", "style"]):
+#                     tag.decompose()
+
+#                 cleaned_text = soup.get_text(separator="\n", strip=True).replace('\n', ' ')
+
+#                 kb_file = KnowledgeFile(
+#                     kb_id=kb.id,
+#                     filename=text_filename,
+#                     file_path=url,
+#                     extract_data=cleaned_text,
+#                     status=FileStatus.completed,
+#                     source_type=SourceStatus.url
+#                 )
+#                 db.add(kb_file)
+#                 db.commit()
+
+#                 source_details = {
+#                     "type": "web_page",
+#                     "source_id": kb.workspace_id,
+#                     "filename": text_filename,
+#                     "file_url": url
+#                 }
+
+#             except Exception as e:
+#                 db.rollback()
+#                 return format_response(False, "Failed to fetch or parse URL", errors=[{"field": "url", "message": str(e)}], status_code=400)
+
+#         elif source_type == "text":
+#             if not text_filename or not text_content:
+#                 return format_response(False, "Text filename and content required", errors=[{"field": "text"}], status_code=400)
+
+#             file_name = f"{uuid4().hex}_{text_filename}.txt"
+#             file_path = kb_path / file_name
+
+#             try:
+#                 with open(file_path, "w", encoding="utf-8") as f:
+#                     f.write(text_content)
+
+#                 kb_file = KnowledgeFile(
+#                     kb_id=kb.id,
+#                     filename=text_filename,
+#                     file_path=str(file_path),
+#                     extract_data=text_content,
+#                     status=FileStatus.completed,
+#                     source_type=SourceStatus.txt
+#                 )
+#                 db.add(kb_file)
+#                 db.commit()
+
+#                 source_details = {
+#                     "type": "text",
+#                     "source_id": kb.workspace_id,
+#                     "filename": text_filename,
+#                     "file_url": str(file_path)
+#                 }
+
+#             except Exception as e:
+#                 db.rollback()
+#                 return format_response(False, "Failed to write text to file", errors=[{"field": "text", "message": str(e)}], status_code=500)
+
+#         else:
+#             return format_response(False, "Invalid source type", errors=[{"field": "source_type"}], status_code=400)
+
+#         return format_response(True, "Knowledge base source added successfully", data=source_details)
+
+#     except Exception as e:
+#         db.rollback()
+#         return format_response(False, "Internal Server Error", errors=[{"field": "server", "message": str(e)}], status_code=500)
+
+    
 @router.delete("/knowledge-bases/{kb_id}")
-def delete_kb(
-    kb_id: int,
+def delete_knowledge_base(
+    kb_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
-        kb = db.query(KnowledgeBase).filter_by(id=kb_id).first()
+        # Fetch knowledge base
+        kb = db.query(KnowledgeBase).filter(KnowledgeBase.id == kb_id).first()
         if not kb:
             return format_response(
                 status=False,
@@ -857,28 +1176,31 @@ def delete_kb(
                 status_code=404
             )
 
-        workspace = db.query(Workspace).filter_by(id=kb.workspace_id).first()
-        if workspace.owner_id != current_user.id:
-            print(f"DEBUG: current_user.id = {current_user.id}, workspace.owner_id = {workspace.owner_id}")
+        # Check workspace ownership
+        workspace = db.query(Workspace).filter(Workspace.id == kb.workspace_id).first()
+        if not workspace or workspace.owner_id != current_user.id:
             return format_response(
                 status=False,
-                message="Only owner can delete",
-                errors=[{"field": "permission", "message": "Only the workspace owner can delete this knowledge base"}],
+                message="Only the workspace owner can delete this knowledge base",
+                errors=[{"field": "permission", "message": "Access denied"}],
                 status_code=403
             )
 
-        db.query(KnowledgeFile).filter_by(kb_id=kb_id).delete()
+        # Delete related knowledge files
+        db.query(KnowledgeFile).filter(KnowledgeFile.kb_id == kb_id).delete()
+
+        # Delete knowledge base
         db.delete(kb)
         db.commit()
 
-        kb_path = UPLOAD_DIR / str(workspace.id) / str(kb.id)
+        # Remove uploaded files from disk
+        kb_path = UPLOAD_DIR / f"workspace_{workspace.id}" / f"knowledge_base_{kb.id}"
         if kb_path.exists():
-            import shutil
             shutil.rmtree(kb_path)
 
         return format_response(
             status=True,
-            message="Knowledge base deleted"
+            message="Knowledge base deleted successfully"
         )
 
     except Exception as e:
@@ -886,17 +1208,19 @@ def delete_kb(
         return format_response(
             status=False,
             message="Internal Server Error",
-            errors=[{"field": "server", "message": str(e)}]
+            errors=[{"field": "server", "message": str(e)}],
+            status_code=500
         )
-
+    
 @router.delete("/knowledge-files/{file_id}")
-def delete_kb_file(
+def delete_knowledge_file(
     file_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
-        file = db.query(KnowledgeFile).filter_by(id=file_id).first()
+        # Fetch the file entry
+        file = db.query(KnowledgeFile).filter(KnowledgeFile.id == file_id).first()
         if not file:
             return format_response(
                 status=False,
@@ -905,27 +1229,45 @@ def delete_kb_file(
                 status_code=404
             )
 
-        kb = db.query(KnowledgeBase).filter_by(id=file.kb_id).first()
-        membership = db.query(WorkspaceMember).filter_by(workspace_id=kb.workspace_id, user_id=current_user.id).first()
+        # Check if user has access to the knowledge base
+        kb = db.query(KnowledgeBase).filter(KnowledgeBase.id == file.kb_id).first()
+        if not kb:
+            return format_response(
+                status=False,
+                message="Knowledge base not found",
+                errors=[{"field": "kb_id", "message": "Associated knowledge base not found"}],
+                status_code=404
+            )
+
+        membership = db.query(WorkspaceMember).filter_by(
+            workspace_id=kb.workspace_id,
+            user_id=current_user.id
+        ).first()
+
         if not membership:
             return format_response(
                 status=False,
                 message="Access denied",
-                errors=[{"field": "workspace_id", "message": "User is not a member of this workspace"}],
+                errors=[{"field": "workspace", "message": "User is not a member of this workspace"}],
                 status_code=403
             )
 
-        try:
-            os.remove(file.file_path)
-        except:
-            pass
+        # Attempt to delete the file from the filesystem
+        file_path = Path(file.file_path)
+        if file_path.exists() and file_path.is_file():
+            try:
+                file_path.unlink()
+            except Exception as e:
+                # Log warning or handle non-fatal file deletion error if needed
+                pass
 
+        # Delete the file record from the database
         db.delete(file)
         db.commit()
 
         return format_response(
             status=True,
-            message="File deleted"
+            message="Knowledge file deleted successfully"
         )
 
     except Exception as e:
@@ -933,8 +1275,291 @@ def delete_kb_file(
         return format_response(
             status=False,
             message="Internal Server Error",
-            errors=[{"field": "server", "message": str(e)}]
+            errors=[{"field": "server", "message": str(e)}],
+            status_code=500
         )
+# /////////////////////////////////////////////////////////////////////////////////////////////
+        
+# @router.get("/knowledge-bases/{kb_id}")
+# def get_knowledge_base(
+#     kb_id: int,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     try:
+#         kb = db.query(KnowledgeBase).filter_by(id=kb_id).first()
+#         if not kb:
+#             return format_response(
+#                 status=False,
+#                 message="Knowledge base not found",
+#                 errors=[{"field": "kb_id", "message": "Knowledge base not found"}],
+#                 status_code=404
+#             )
+
+#         membership = db.query(WorkspaceMember).filter_by(
+#             workspace_id=kb.workspace_id,
+#             user_id=current_user.id
+#         ).first()
+#         if not membership:
+#             return format_response(
+#                 status=False,
+#                 message="Access denied",
+#                 errors=[{"field": "workspace", "message": "Access denied"}],
+#                 status_code=403
+#             )
+
+#         files = db.query(KnowledgeFile).filter_by(kb_id=kb.id).all()
+#         sources = [
+#             {
+#                 "type": "document",
+#                 "source_id": kb.workspace_id,
+#                 "filename": f.filename,
+#                 "file_url": f.file_path
+#             } for f in files
+#         ]
+
+#         data = {
+#             "knowledge_base_id": f"knowledge_base_{kb.id}",
+#             "knowledge_base_name": kb.name,
+#             "status": "ready",
+#             "knowledge_base_sources": sources,
+#             "enable_auto_refresh": kb.enable_auto_refresh,
+#             "last_refreshed_timestamp": int(kb.last_refreshed.timestamp() * 1000)
+#         }
+
+#         return format_response(
+#             status=True,
+#             message="Knowledge base details fetched",
+#             data=data
+#         )
+
+#     except Exception as e:
+#         db.rollback()
+#         return format_response(
+#             status=False,
+#             message="Internal Server Error",
+#             errors=[{"field": "server", "message": str(e)}]
+#         )
+
+
+# @router.post("/knowledge-bases/{kb_id}/sources")
+# async def add_kb_source(
+#     kb_id: int,
+#     source_type: str = Form(...),
+#     file: UploadFile = File(None),
+#     url: str = Form(None),
+#     text_filename: str = Form(None),
+#     text_content: str = Form(None),
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     try:
+#         kb = db.query(KnowledgeBase).filter_by(id=kb_id).first()
+#         if not kb:
+#             return format_response(
+#                 status=False,
+#                 message="Knowledge base not found",
+#                 errors=[{"field": "kb_id", "message": "Knowledge base not found"}],
+#                 status_code=404
+#             )
+
+#         membership = db.query(WorkspaceMember).filter_by(workspace_id=kb.workspace_id, user_id=current_user.id).first()
+#         if not membership:
+#             return format_response(
+#                 status=False,
+#                 message="Access denied",
+#                 errors=[{"field": "workspace_id", "message": "User is not a member of this workspace"}],
+#                 status_code=403
+#             )
+
+#         kb_path = UPLOAD_DIR / f"workspace_{kb.workspace_id}" / f"knowledge_base_{kb_id}"
+#         kb_path.mkdir(parents=True, exist_ok=True)
+
+#         file_path = None
+#         file_name = None
+#         source_details = {}
+
+#         if source_type == "file":
+#             if not file:
+#                 return format_response(
+#                     status=False,
+#                     message="No file uploaded",
+#                     errors=[{"field": "file", "message": "File required"}]
+#                 )
+#             file_name = f"{uuid.uuid4().hex}_{file.filename}"
+#             file_path = kb_path / file_name
+#             with open(file_path, "wb") as f_out:
+#                 f_out.write(await file.read())
+#             source_details = {
+#                 "type": "document",
+#                 "source_id": kb.workspace_id,
+#                 "filename": file_name,
+#                 "file_url": str(file_path)
+#             }
+
+#         elif source_type == "web_page":
+#             if not url:
+#                 return format_response(
+#                     status=False,
+#                     message="No URL provided",
+#                     errors=[{"field": "url", "message": "URL is required"}]
+#                 )
+#             file_name = f"web_{uuid.uuid4().hex}.txt"
+#             file_path = kb_path / file_name
+#             with open(file_path, "w", encoding="utf-8") as f:
+#                 f.write(f"Crawled content from {url}")
+#             source_details = {
+#                 "type": "web_page",
+#                 "source_id": kb.workspace_id,
+#                 "filename": file_name,
+#                 "file_url": str(file_path)
+#             }
+
+#         elif source_type == "text":
+#             if not text_filename or not text_content:
+#                 return format_response(
+#                     status=False,
+#                     message="Filename and content required",
+#                     errors=[{"field": "text", "message": "Both filename and content are required"}]
+#                 )
+#             file_name = f"{uuid.uuid4().hex}_{text_filename}.txt"
+#             file_path = kb_path / file_name
+#             with open(file_path, "w", encoding="utf-8") as f:
+#                 f.write(text_content)
+#             source_details = {
+#                 "type": "text",
+#                 "source_id": kb.workspace_id,
+#                 "filename": file_name,
+#                 "file_url": str(file_path)
+#             }
+
+#         else:
+#             return format_response(
+#                 status=False,
+#                 message="Invalid source type",
+#                 errors=[{"field": "source_type", "message": "Must be one of: file, web_page, text"}],
+#                 status_code=400
+#             )
+
+#         # Optionally store source in KnowledgeFile
+#         if source_type == "file":
+#             kb_file = KnowledgeFile(
+#                 kb_id=kb.id,
+#                 filename=file_name,
+#                 file_path=str(file_path)
+#             )
+#             db.add(kb_file)
+#             db.commit()
+#             db.refresh(kb_file)
+
+#         return format_response(
+#             status=True,
+#             message="Knowledge base source added",
+#             data=source_details
+#         )
+
+#     except Exception as e:
+#         db.rollback()
+#         return format_response(
+#             status=False,
+#             message="Internal Server Error",
+#             errors=[{"field": "server", "message": str(e)}]
+#         )
+
+# @router.delete("/knowledge-bases/{kb_id}")
+# def delete_kb(
+#     kb_id: int,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     try:
+#         kb = db.query(KnowledgeBase).filter_by(id=kb_id).first()
+#         if not kb:
+#             return format_response(
+#                 status=False,
+#                 message="Knowledge base not found",
+#                 errors=[{"field": "kb_id", "message": "Knowledge base not found"}],
+#                 status_code=404
+#             )
+
+#         workspace = db.query(Workspace).filter_by(id=kb.workspace_id).first()
+#         if workspace.owner_id != current_user.id:
+#             print(f"DEBUG: current_user.id = {current_user.id}, workspace.owner_id = {workspace.owner_id}")
+#             return format_response(
+#                 status=False,
+#                 message="Only owner can delete",
+#                 errors=[{"field": "permission", "message": "Only the workspace owner can delete this knowledge base"}],
+#                 status_code=403
+#             )
+
+#         db.query(KnowledgeFile).filter_by(kb_id=kb_id).delete()
+#         db.delete(kb)
+#         db.commit()
+
+#         kb_path = UPLOAD_DIR / str(workspace.id) / str(kb.id)
+#         if kb_path.exists():
+#             import shutil
+#             shutil.rmtree(kb_path)
+
+#         return format_response(
+#             status=True,
+#             message="Knowledge base deleted"
+#         )
+
+#     except Exception as e:
+#         db.rollback()
+#         return format_response(
+#             status=False,
+#             message="Internal Server Error",
+#             errors=[{"field": "server", "message": str(e)}]
+#         )
+
+# @router.delete("/knowledge-files/{file_id}")
+# def delete_kb_file(
+#     file_id: int,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     try:
+#         file = db.query(KnowledgeFile).filter_by(id=file_id).first()
+#         if not file:
+#             return format_response(
+#                 status=False,
+#                 message="File not found",
+#                 errors=[{"field": "file_id", "message": "Knowledge file not found"}],
+#                 status_code=404
+#             )
+
+#         kb = db.query(KnowledgeBase).filter_by(id=file.kb_id).first()
+#         membership = db.query(WorkspaceMember).filter_by(workspace_id=kb.workspace_id, user_id=current_user.id).first()
+#         if not membership:
+#             return format_response(
+#                 status=False,
+#                 message="Access denied",
+#                 errors=[{"field": "workspace_id", "message": "User is not a member of this workspace"}],
+#                 status_code=403
+#             )
+
+#         try:
+#             os.remove(file.file_path)
+#         except:
+#             pass
+
+#         db.delete(file)
+#         db.commit()
+
+#         return format_response(
+#             status=True,
+#             message="File deleted"
+#         )
+
+#     except Exception as e:
+#         db.rollback()
+#         return format_response(
+#             status=False,
+#             message="Internal Server Error",
+#             errors=[{"field": "server", "message": str(e)}]
+#         )
     
 @router.get("/workspaces/{workspace_id}/settings")
 def get_workspace_settings(
