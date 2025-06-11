@@ -86,7 +86,7 @@ async def entrypoint(ctx: JobContext):
     finally:
         session.close()
 
-    user_query = "How does the AI assistant work?"  # This will be replaced by real user input dynamically 
+    user_query = "How does the AI assistant work?"  # This will be replaced by real user input dynamically
     relevant_context = retrieve_relevant_context(user_query, kb_files)
 
     agent = Assistant(context=relevant_context)
