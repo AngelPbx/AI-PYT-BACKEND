@@ -111,10 +111,9 @@ async def entrypoint(ctx: JobContext):
 
     await ctx.connect()
 
-    # ⚠️ This simulate one reply generation; actual interaction should be turn-based in production
-    # await session_obj.generate_reply(user_input=user_query)
     await session_obj.generate_reply(user_input="Hello! I'm your AI assistant. How can I help you today?")
 
 # 🧪 CLI Worker launch
 if __name__ == "__main__":
     agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
+

@@ -41,7 +41,7 @@ async def create_room():
         async with session.post(url, headers=headers, json=payload) as resp:
             if resp.status == 200:
                 data = await resp.json()
-                print("✅ Room created successfully:", data)
+                print("Room created successfully:", data)
             else:
                 print(f"❌ Error creating room ({resp.status}): {await resp.text()}")
 
