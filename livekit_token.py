@@ -16,7 +16,7 @@ def generate_jwt(api_key: str, api_secret: str, ttl: int = 3600) -> str:
     payload = {
         "iss": api_key,
         "exp": int(time.time()) + ttl,
-        "roomCreate": True  # ✅ top-level claim
+        "roomCreate": True 
     }
     token = jwt.encode(payload, api_secret, algorithm="HS256")
     if isinstance(token, bytes):
@@ -31,7 +31,7 @@ def create_room(room_name: str):
     
     print("Generated JWT token:", token)
     if not token:
-        print("❌ Failed to generate JWT token")
+        print("==> Failed to generate JWT token")
         return
     
     headers = {
@@ -46,9 +46,9 @@ def create_room(room_name: str):
     response = requests.post(LIVEKIT_URL, headers=headers, json=data)
 
     if response.status_code == 200:
-        print("✅ Room created:", response.json())
+        print("==> Room created:", response.json())
     else:
-        print("❌ Failed to create room:", response.status_code, response.text)
+        print("==> Failed to create room:", response.status_code, response.text)
 
 
 # Example usage
