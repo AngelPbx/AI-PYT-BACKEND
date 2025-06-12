@@ -4,24 +4,23 @@ import jwt
 from aiohttp import ClientSession
 
 # LiveKit credentials
-API_KEY = "APIGCNVJPqywiDJ"
-API_SECRET = "8ek56lzz7m3eR0Htipt7wyDIhy6YSJAlYYdOBw4rwe7A"
-LIVEKIT_URL = "https://create-agent-7nehkvvu.livekit.cloud"
+API_KEY = "APIFTbB7ZDuDmwL"
+API_SECRET = "gE63Bpx7amNAnG77voI9QfeEX4vCWFrPNIQTceKGStRB"
+LIVEKIT_URL = "https://bestagent-8alh62on.livekit.cloud"
 
 def generate_admin_token():
     now = int(time.time()) - 3000
     payload = {
-        "iss": "APIGCNVJPqywiDJ",
+        "iss": API_KEY,
         "aud": "livekit",
         "iat": now,
         "exp": now + 3600,
         "video": {
-            "roomCreate": True
+            "roomCreate": True,
+            "roomList": True  # ✅ Important for listing rooms
         }
     }
-
     return jwt.encode(payload, API_SECRET, algorithm="HS256")
-
 
 async def create_room():
     token = generate_admin_token()
@@ -44,7 +43,25 @@ async def create_room():
                 data = await resp.json()
                 print("Room created successfully:", data)
             else:
-                print(f"Error ({resp.status}): {await resp.text()}")
+                print(f"❌ Error creating room ({resp.status}): {await resp.text()}")
+
+async def list_rooms():
+    token = generate_admin_token()
+    url = f"{LIVEKIT_URL}/twirp/livekit.RoomService/ListRooms"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}"
+    }
+
+    async with ClientSession() as session:
+        async with session.post(url, headers=headers, json={}) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                print("📋 Current rooms:", data)
+            else:
+                print(f"❌ Error listing rooms ({resp.status}): {await resp.text()}")
 
 if __name__ == "__main__":
-    asyncio.run(create_room())
+    asyncio.run(list_rooms())
+    # asyncio.run(create_room())  # You can toggle this
