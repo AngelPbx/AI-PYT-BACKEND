@@ -14,7 +14,7 @@ def generate_admin_token():
         "iss": "APIGCNVJPqywiDJ",
         "aud": "livekit",
         "iat": now,
-        "exp": now + 3600,  # Token valid for 1 hour
+        "exp": now + 3600,
         "video": {
             "roomCreate": True
         }
@@ -42,9 +42,9 @@ async def create_room():
         async with session.post(url, headers=headers, json=payload) as resp:
             if resp.status == 200:
                 data = await resp.json()
-                print("✅ Room created successfully:", data)
+                print("Room created successfully:", data)
             else:
-                print(f"❌ Error ({resp.status}): {await resp.text()}")
+                print(f"Error ({resp.status}): {await resp.text()}")
 
 if __name__ == "__main__":
     asyncio.run(create_room())
