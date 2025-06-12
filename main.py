@@ -8,6 +8,7 @@ from routes import router
 from db.database import engine, Base
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 
 app = FastAPI()
 app.include_router(router)
@@ -15,8 +16,12 @@ app.include_router(router)
 # Base.metadata.drop_all(bind=engine, checkfirst=True)  
 Base.metadata.create_all(bind=engine)
 
+load_dotenv()
+
 STATIC_DIR = Path(os.getenv("STATIC_DIR", "static")).resolve()
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
+print(f"Static files directory: {STATIC_DIR}")
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

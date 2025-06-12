@@ -1,6 +1,7 @@
 import asyncio
 import time
 import jwt
+import json
 from aiohttp import ClientSession
 
 # LiveKit credentials
@@ -17,10 +18,14 @@ def generate_admin_token():
         "exp": now + 3600,
         "video": {
             "roomCreate": True,
-            "roomList": True  # ✅ Important for listing rooms
+            "roomList": True
         }
     }
     return jwt.encode(payload, API_SECRET, algorithm="HS256")
+
+def pretty_print(title, data):
+    print(f"\n==> {title}")
+    print(json.dumps(data, indent=2))
 
 async def create_room():
     token = generate_admin_token()
@@ -41,9 +46,9 @@ async def create_room():
         async with session.post(url, headers=headers, json=payload) as resp:
             if resp.status == 200:
                 data = await resp.json()
-                print("Room created successfully:", data)
+                pretty_print("Room created successfully", data)
             else:
-                print(f"❌ Error creating room ({resp.status}): {await resp.text()}")
+                print(f"\n❌ Error creating room ({resp.status}):\n{await resp.text()}")
 
 async def list_rooms():
     token = generate_admin_token()
@@ -58,10 +63,10 @@ async def list_rooms():
         async with session.post(url, headers=headers, json={}) as resp:
             if resp.status == 200:
                 data = await resp.json()
-                print("📋 Current rooms:", data)
+                pretty_print("Current rooms", data)
             else:
-                print(f"❌ Error listing rooms ({resp.status}): {await resp.text()}")
+                print(f"\n❌ Error listing rooms ({resp.status}):\n{await resp.text()}")
 
 if __name__ == "__main__":
     asyncio.run(list_rooms())
-    # asyncio.run(create_room())  # You can toggle this
+    asyncio.run(create_room())
