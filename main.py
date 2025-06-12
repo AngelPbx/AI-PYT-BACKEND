@@ -3,18 +3,32 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from pathlib import Path
+import os
+
 from utils.helpers import format_response
 from routes import router
 from db.database import engine, Base
 
+# Initialize FastAPI app
 app = FastAPI()
 app.include_router(router)
 
-# Base.metadata.drop_all(bind=engine, checkfirst=True)  
+# Database setup
 Base.metadata.create_all(bind=engine)
 
-app.mount("/files", StaticFiles(directory="uploads"), name="files")
+# Resolve and ensure static and upload directories
+STATIC_DIR = Path(os.getenv("STATIC_DIR", "static")).resolve()
+UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads")).resolve()
 
+for directory in [STATIC_DIR, UPLOAD_DIR]:
+    directory.mkdir(parents=True, exist_ok=True)
+
+# Mount static file routes
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/files", StaticFiles(directory=UPLOAD_DIR), name="files")
+
+# Exception Handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = []
