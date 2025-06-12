@@ -18,7 +18,7 @@ def generate_participant_token(room_name, identity):
         "sub": identity,
         "aud": "livekit",
         "room": room_name,
-        "iat": now,
+        "iat": now - 3000,
         "exp": now + 3600,
         "video": {
             "roomJoin": True
@@ -27,7 +27,6 @@ def generate_participant_token(room_name, identity):
     return jwt.encode(payload, API_SECRET, algorithm="HS256")
 def generate_admin_token(room_name=None,identity=None):
     now = int(time.time())
-    print(now,"Generating admin token with room_name:", room_name, "and identity:", identity)
     payload = {
         "iss": API_KEY,
         "aud": "livekit",
@@ -110,7 +109,7 @@ async def list_participants(room_name: str, identity: str):
 
 
 if __name__ == "__main__":
-    asyncio.run(create_room())
+    # asyncio.run(create_room())
     # asyncio.run(list_rooms())
-    # asyncio.run(list_participants("ankit","admin"))  # Specify the room name and identity
+    asyncio.run(list_participants("ankit","admin"))  # Specify the room name and identity
       # You can toggle this

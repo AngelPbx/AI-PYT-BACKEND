@@ -8,7 +8,7 @@ from openai import OpenAI
 from fastapi import FastAPI, Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter, BackgroundTasks
 from utils.helpers import is_user_in_workspace, generate_api_key
 from sqlalchemy.orm import Session
-import uuid
+import uuid 
 import requests
 from bs4 import BeautifulSoup
 import time
