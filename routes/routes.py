@@ -29,9 +29,10 @@ from utils.security import (
     create_token
 )
 
-app = FastAPI()
-router = APIRouter()
 from db.database import engine, Base
+
+router = APIRouter()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # UPLOAD_DIR = Path("uploads").resolve()
 # UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -966,7 +967,6 @@ async def add_kb_source(
         else:
             return format_response(False, "Invalid source type", status_code=400)
 
-        # ✅ Generate Embedding (truncated for safety)
         clean_text = extract_text.replace("\n", " ").strip()
         truncated = clean_text[:3000]  # limit tokens for embedding
 

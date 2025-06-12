@@ -167,31 +167,58 @@ print("✅ SECRET:", os.getenv("LIVEKIT_API_SECRET"))
 #     asyncio.run(main())
 
 
-  
-
-    
-
+# create_room.py
 import os
+import time
 import asyncio
+import jwt
+from aiohttp import ClientSession
 from dotenv import load_dotenv
-import livekit.api as api
 
-# Load environment variables
 load_dotenv()
 
-async def create_room_async():
-    try:
-        # ✅ Initialize inside async function to avoid event loop error
-       async with api.LiveKitAPI(
-        url=os.getenv("LIVEKIT_URL"),
-        api_key=os.getenv("LIVEKIT_API_KEY"),
-        api_secret=os.getenv("LIVEKIT_API_SECRET")
-    ) as lkapi:
-        room = await lkapi.room.create_room(api.CreateRoomRequest(name="test-room"))
-        print("Room created:", room)
-        
-    except Exception as e:
-        print("❌ Exception occurred:", e)
+# ✅ Load credentials from .env
+API_KEY = os.getenv("LIVEKIT_API_KEY")
+API_SECRET = os.getenv("LIVEKIT_API_SECRET")
+LIVEKIT_URL = os.getenv("LIVEKIT_URL")
+
+# ✅ Generate admin token with roomCreate permission
+def generate_admin_token():
+    now = int(time.time()) - 10  # small clock drift buffer
+    payload = {
+        "iss": API_KEY,
+        "aud": "livekit",
+        "iat": now,
+        "exp": now + 3600,
+        "video": {
+            "roomCreate": True
+        }
+    }
+    return jwt.encode(payload, API_SECRET, algorithm="HS256")
+
+# ✅ Create room using raw HTTP request
+async def create_room():
+    token = generate_admin_token()
+    url = f"{LIVEKIT_URL}/twirp/livekit.RoomService/CreateRoom"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {token}"
+    }
+
+    payload = {
+        "name": "myroom",
+        "empty_timeout": 600,
+        "max_participants": 10
+    }
+
+    async with ClientSession() as session:
+        async with session.post(url, headers=headers, json=payload) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                print("✅ Room created successfully:", data)
+            else:
+                print(f"❌ Error ({resp.status}): {await resp.text()}")
 
 if __name__ == "__main__":
-    asyncio.run(create_room_async())
+    asyncio.run(create_room())
