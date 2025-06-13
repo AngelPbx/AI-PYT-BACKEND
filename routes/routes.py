@@ -3,9 +3,8 @@ from docx import Document  #pip install pymupdf python-docx
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
-from io import BytesIO
 from openai import OpenAI
-from fastapi import FastAPI, Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter, BackgroundTasks
+from fastapi import Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter
 from utils.helpers import is_user_in_workspace, generate_api_key
 from sqlalchemy.orm import Session
 import uuid
@@ -34,14 +33,14 @@ from db.database import engine, Base
 router = APIRouter()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-# UPLOAD_DIR = Path("uploads").resolve()
-# UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads")).resolve()
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 # Initialize OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-@router.get("/check-username")
 
+@router.get("/check-username")
 def check_username_availability(
     username: str = Query(..., min_length=5, max_length=50),
     db: Session = Depends(get_db)
@@ -65,7 +64,6 @@ def check_username_availability(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
-
 
 @router.post("/signup")
 def signup(user: UserSignup, db: Session = Depends(get_db)):
@@ -147,7 +145,6 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
             errors=[{"field": "server", "message": str(e)}]
         )
 
-
 @router.post("/login")
 def login(user: UserLogin, db: Session = Depends(get_db)):
     try:
@@ -161,9 +158,9 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             status=True,
             message="Login successful",
             data={
-                "token": 'Bearer_' + token,
+                "token": 'Bearer' + token,
                 "expires_at": expire.isoformat() + "Z",
-                "expire_duration": int(os.getenv("TOKEN_EXPIRE_MINUTES")),
+                "expire_duration_minutes": int(os.getenv("TOKEN_EXPIRE_MINUTES", 60)),
                 "retall_api_key": db_user.retall_api_key
             }
         )
