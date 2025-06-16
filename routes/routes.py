@@ -394,7 +394,6 @@ def check_user_status(db: Session = Depends(get_db), current_user: User = Depend
             errors=[{"field": "server", "message": str(e)}]
         )
 
-
 @router.post("/workspaces")
 def create_workspace(data: WorkspaceCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
