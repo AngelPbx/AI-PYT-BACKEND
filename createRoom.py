@@ -5,9 +5,9 @@ import json
 from aiohttp import ClientSession
 
 # LiveKit credentials
-API_KEY = "APIFTbB7ZDuDmwL"
-API_SECRET = "gE63Bpx7amNAnG77voI9QfeEX4vCWFrPNIQTceKGStRB"
-LIVEKIT_URL = "https://bestagent-8alh62on.livekit.cloud"
+LIVEKIT_URL="https://trial-agent-m3zdvur5.livekit.cloud"
+API_KEY="APIGp7PPyuhzxA6"
+API_SECRET="MhfVPdp7vSFJelweQlXJfJS6rJs4OqjL6qfecGUEjuTD"
 
 def generate_admin_token():
     now = int(time.time()) - 3000
@@ -48,7 +48,7 @@ async def create_room():
                 data = await resp.json()
                 pretty_print("Room created successfully", data)
             else:
-                print(f"\n❌ Error creating room ({resp.status}):\n{await resp.text()}")
+                print(f"\n Error creating room ({resp.status}):\n{await resp.text()}")
 
 async def list_rooms():
     token = generate_admin_token()
@@ -65,8 +65,10 @@ async def list_rooms():
                 data = await resp.json()
                 pretty_print("Current rooms", data)
             else:
-                print(f"\n❌ Error listing rooms ({resp.status}):\n{await resp.text()}")
+                print(f"\n Error listing rooms ({resp.status}):\n{await resp.text()}")
 
 if __name__ == "__main__":
     asyncio.run(list_rooms())
     asyncio.run(create_room())
+    
+    #in this code the room is created and listed using the LiveKit API. what i want to do is whenever a participant joins the room, auto
