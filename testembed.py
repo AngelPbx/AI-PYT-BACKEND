@@ -22,7 +22,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # OpenAI client
 client = OpenAI()
 
-# 🧠 Embedding helper
+# Embedding helper
 def get_embedding(text: str) -> List[float]:
     text = text.replace("\n", " ").strip()
     if not text:
@@ -33,13 +33,13 @@ def get_embedding(text: str) -> List[float]:
     )
     return response.data[0].embedding
 
-# 📚 Vector similarity search using cosine similarity
+# Vector similarity search using cosine similarity
 def cosine_similarity(a, b):
     if not a or not b:
         return 0
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-# 🔍 RAG Retriever using query + document embedding match
+# RAG Retriever using query + document embedding match
 def retrieve_relevant_context(query: str, kb_files: List[KnowledgeFile], top_k=3) -> str:
     query_embedding = get_embedding(query)
     scored_chunks = []
@@ -60,7 +60,7 @@ def retrieve_relevant_context(query: str, kb_files: List[KnowledgeFile], top_k=3
     top_chunks = sorted(scored_chunks, reverse=True, key=lambda x: x[0])[:top_k]
     return "\n\n".join(chunk for _, chunk in top_chunks)
 
-# 💬 Instruction builder for context-limited AI responses
+# Instruction builder for context-limited AI responses
 def build_instructions(context: str) -> str:
     print(f"Building instructions with context length: {len(context)} characters")
     return (
@@ -78,7 +78,7 @@ class Assistant(Agent):
 # Entry point for LiveKit Worker
 async def entrypoint(ctx: JobContext):
     kb_id = "ff60517228a84e22"  # You can later pass this from ctx.metadata
-    print(f"🔍 Fetching context for KB ID: {kb_id}")
+    print(f"Fetching context for KB ID: {kb_id}")
     
     session = SessionLocal()
     try:
@@ -113,7 +113,7 @@ async def entrypoint(ctx: JobContext):
 
     await session_obj.generate_reply(user_input="Hello! I'm your AI assistant. How can I help you today?")
 
-# 🧪 CLI Worker launch
+# CLI Worker launch
 if __name__ == "__main__":
     agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
 

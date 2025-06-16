@@ -9,24 +9,19 @@ import os
 from utils.helpers import format_response
 from routes import router
 from db.database import engine, Base
+from pathlib import Path
+import os
+from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
 
 # Initialize FastAPI app
 app = FastAPI()
 app.include_router(router)
 
-# Database setup
+# Base.metadata.drop_all(bind=engine, checkfirst=True)  
 Base.metadata.create_all(bind=engine)
 
-# Resolve and ensure static and upload directories
-STATIC_DIR = Path(os.getenv("STATIC_DIR", "static")).resolve()
-UPLOAD_DIR = Path(os.getenv("UPLOAD_DIR", "uploads")).resolve()
-
-for directory in [STATIC_DIR, UPLOAD_DIR]:
-    directory.mkdir(parents=True, exist_ok=True)
-
-# Mount static file routes
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-app.mount("/files", StaticFiles(directory=UPLOAD_DIR), name="files")
+app.mount("/files", StaticFiles(directory="uploads"), name="files")
 
 # Exception Handlers
 @app.exception_handler(RequestValidationError)
