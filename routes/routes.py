@@ -158,7 +158,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
             status=True,
             message="Login successful",
             data={
-                "token": 'Bearer' + token,
+                "token": 'Bearer ' + token,
                 "expires_at": expire.isoformat() + "Z",
                 "expire_duration_minutes": int(os.getenv("TOKEN_EXPIRE_MINUTES", 60)),
                 "retall_api_key": db_user.retall_api_key

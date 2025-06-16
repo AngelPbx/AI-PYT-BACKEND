@@ -22,7 +22,7 @@ def format_response(
     data: Optional[Any] = None,
     errors: Optional[List[Dict[str, str]]] = None,
     status_code: int = 201
-) -> JSONResponse:
+) -> dict:
     response = {
         "status": status,
         "message": message,
@@ -30,7 +30,7 @@ def format_response(
     }
     if errors is not None:
         response["errors"] = errors
-    return JSONResponse(content=response, status_code=status_code)
+    return response
 
 def format_datetime_ist(dt: datetime) -> str:
     ist = pytz.timezone("Asia/Kolkata")
