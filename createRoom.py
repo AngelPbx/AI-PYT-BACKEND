@@ -1,32 +1,16 @@
 import asyncio
 import time
 import jwt
+import json
 from aiohttp import ClientSession
 
 # LiveKit credentials
-# API_KEY = "APIFTbB7ZDuDmwL"
-# API_SECRET = "gE63Bpx7amNAnG77voI9QfeEX4vCWFrPNIQTceKGStRB"
-# LIVEKIT_URL = "https://bestagent-8alh62on.livekit.cloud"
+LIVEKIT_URL="https://trial-agent-m3zdvur5.livekit.cloud"
+API_KEY="APIGp7PPyuhzxA6"
+API_SECRET="MhfVPdp7vSFJelweQlXJfJS6rJs4OqjL6qfecGUEjuTD"
 
-API_KEY = "APIU7upDtrpdrEK"
-API_SECRET = "LWfMIqkaYAf7MgfqHnmCGkdt2jjPWeTTGxFHmvJJJHND"
-LIVEKIT_URL = "https://natty-gz614tko.livekit.cloud"
-def generate_participant_token(room_name, identity):
-    now = int(time.time())
-    payload = {
-        "iss": API_KEY,
-        "sub": identity,
-        "aud": "livekit",
-        "room": room_name,
-        "iat": now - 3000,
-        "exp": now + 3600,
-        "video": {
-            "roomJoin": True
-        }
-    }
-    return jwt.encode(payload, API_SECRET, algorithm="HS256")
-def generate_admin_token(room_name=None,identity=None):
-    now = int(time.time())
+def generate_admin_token():
+    now = int(time.time()) - 3000
     payload = {
         "iss": API_KEY,
         "aud": "livekit",
@@ -35,16 +19,17 @@ def generate_admin_token(room_name=None,identity=None):
         "exp": now + 3600,
         "video": {
             "roomCreate": True,
-            "roomList": True,
-            "roomJoin": True,
-            "roomAdmin": True,
-            "roomRecord": True
+            "roomList": True
         }
     }
     if room_name:
         payload["sub"] = identity  # ✅ Include only if needed
         payload["room"] = room_name  # ✅ Include only if needed
     return jwt.encode(payload, API_SECRET, algorithm="HS256")
+
+def pretty_print(title, data):
+    print(f"\n==> {title}")
+    print(json.dumps(data, indent=2))
 
 async def create_room():
     token = generate_admin_token()
@@ -65,9 +50,9 @@ async def create_room():
         async with session.post(url, headers=headers, json=payload) as resp:
             if resp.status == 200:
                 data = await resp.json()
-                print("✅ Room created successfully:", data)
+                pretty_print("Room created successfully", data)
             else:
-                print(f"❌ Error creating room ({resp.status}): {await resp.text()}")
+                print(f"\n Error creating room ({resp.status}):\n{await resp.text()}")
 
 async def list_rooms():
     token = generate_admin_token()
@@ -82,34 +67,12 @@ async def list_rooms():
         async with session.post(url, headers=headers, json={}) as resp:
             if resp.status == 200:
                 data = await resp.json()
-                print("📋 Current rooms:", data)
+                pretty_print("Current rooms", data)
             else:
-                print(f"❌ Error listing rooms ({resp.status}): {await resp.text()}")
-
-async def list_participants(room_name: str, identity: str):
-    token = generate_participant_token(room_name,identity)
-    url = f"{LIVEKIT_URL}/twirp/livekit.RoomService/ListParticipants"
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {token}"
-    }
-
-    payload = {
-        "room": room_name
-    }
-
-    async with ClientSession() as session:
-        async with session.post(url, headers=headers, json=payload) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                print(f"👥 Participants in room '{room_name}':", data)
-            else:
-                print(f"❌ Error listing participants ({resp.status}): {await resp.text()}")
-
+                print(f"\n Error listing rooms ({resp.status}):\n{await resp.text()}")
 
 if __name__ == "__main__":
-    # asyncio.run(create_room())
-    # asyncio.run(list_rooms())
-    asyncio.run(list_participants("ankit","admin"))  # Specify the room name and identity
-      # You can toggle this
+    asyncio.run(list_rooms())
+    asyncio.run(create_room())
+    
+    #in this code the room is created and listed using the LiveKit API. what i want to do is whenever a participant joins the room, auto
