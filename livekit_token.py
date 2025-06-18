@@ -13,7 +13,7 @@ from models.models import KnowledgeFile
 import numpy as np
 from openai import OpenAI
 from typing import List, AsyncIterable, Optional
-import os
+import os, json
 
 # Load environment variables
 load_dotenv()
@@ -122,13 +122,34 @@ class Assistant(Agent):
         )
 
 
-
-
-# ---------- Entrypoint ----------
+# ---------- Entrypoint ----------1821485571600
 async def entrypoint(ctx: JobContext):
     room = os.getenv("ROOM", "myroom")
     identity = os.getenv("IDENTITY", "agent-bot")
-    kb_id = "df639e6aede94487"  # Your knowledge base ID
+    print(f"🔗 Connecting to room: {room} as {identity}")
+
+    metadata = ctx.room.metadata
+    if not isinstance(metadata, str) or not metadata.strip():
+        metadata = os.getenv("ROOM_METADATA", "{}")
+   
+    print(f"📜 Room metadata: {metadata}")
+
+    try:
+        if isinstance(metadata, str):
+            meta = json.loads(metadata)
+        else:
+            meta = json.loads(str(metadata))
+        kb_id = meta.get("kb_id", "Not provided")
+        print(f"✅ kb_id: {kb_id}")
+    except Exception as e:
+        print(f"⚠️ Failed to parse metadata: {e}")
+        kb_id = None
+
+    if not kb_id or kb_id == "Not provided":
+        print("❌ kb_id not provided in room metadata.")
+        return
+        
+    # kb_id = "df639e6aede94487"  # Your knowledge base ID
 
     print(f"🎤 Joining room {room} as {identity}")
     agent = Assistant(kb_id=kb_id)
