@@ -22,9 +22,9 @@ def generate_admin_token():
             "roomList": True
         }
     }
-    if room_name:
-        payload["sub"] = identity  # ✅ Include only if needed
-        payload["room"] = room_name  # ✅ Include only if needed
+    # if room_name:
+    #     payload["sub"] = identity  # ✅ Include only if needed
+    #     payload["room"] = room_name  # ✅ Include only if needed
     return jwt.encode(payload, API_SECRET, algorithm="HS256")
 
 def pretty_print(title, data):
@@ -43,7 +43,10 @@ async def create_room():
     payload = {
         "name": "ankit",
         "empty_timeout": 600,
-        "max_participants": 10
+        "max_participants": 10,
+         "metadata": json.dumps({
+            "kb_id": "df639e6aede94487"  # 👈 Pass your dynamic KB ID here
+        })
     }
     #create room
     async with ClientSession() as session:
@@ -73,6 +76,6 @@ async def list_rooms():
 
 if __name__ == "__main__":
     asyncio.run(list_rooms())
-    asyncio.run(create_room())
+    # asyncio.run(create_room())
     
     #in this code the room is created and listed using the LiveKit API. what i want to do is whenever a participant joins the room, auto
