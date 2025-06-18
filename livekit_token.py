@@ -1,13 +1,14 @@
 from dotenv import load_dotenv
 from livekit import agents, rtc
 from livekit.agents import AgentSession, Agent, RoomInputOptions, JobContext
-from livekit.agents import stt, llm
+from livekit.agents import stt
 from livekit.agents.llm import ChatContext, ChatMessage
 from livekit.plugins import openai, noise_cancellation, deepgram, silero
+from livekit.plugins.turn_detector.multilingual import MultilingualModel
+
 from sqlalchemy.orm import sessionmaker
 from db.database import engine
 from models.models import KnowledgeFile
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 import numpy as np
 from openai import OpenAI
@@ -17,12 +18,14 @@ import os
 # Load environment variables
 load_dotenv()
 
-# Database session setup
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Setup DB session
+SessionLocal = sessionmaker(bind=engine)
 
 # OpenAI client
 client = OpenAI()
 
+
+# ---------- Embedding Logic ----------
 def get_embedding(text: str) -> List[float]:
     text = text.replace("\n", " ").strip()
     if not text:
@@ -33,12 +36,15 @@ def get_embedding(text: str) -> List[float]:
     )
     return response.data[0].embedding
 
+
 def cosine_similarity(a, b):
     if not a or not b:
         return 0
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
+
 def retrieve_relevant_context(query: str, kb_files: List[KnowledgeFile], top_k=3) -> str:
+    print(f"🔍 Retrieving relevant context for query: '{query}'")
     query_embedding = get_embedding(query)
     scored_chunks = []
 
@@ -57,106 +63,94 @@ def retrieve_relevant_context(query: str, kb_files: List[KnowledgeFile], top_k=3
     top_chunks = sorted(scored_chunks, reverse=True, key=lambda x: x[0])[:top_k]
     return "\n\n".join(chunk for _, chunk in top_chunks)
 
+
 def build_instructions(context: str) -> str:
-    print(f"🧱 Building instructions with context length: {len(context)} characters")
+    print(f"🧱 Building instructions with context length: {len(context)}")
     return (
-        "You are a friendly AI assistant. Only respond using the information provided below.\n"
-        "If a user says 'hello', 'hey', or greets you casually, reply warmly.\n"
-        "If a user asks something that's not in the context, respond: 'I don’t have information on that.'\n\n"
+        "You are a friendly AI assistant. Only respond using the information below.\n"
+        "If the question is unrelated, say: 'I don’t have information on that.'\n\n"
         f"Context:\n{context}"
     )
 
+
+# ---------- Assistant Agent ----------
 class Assistant(Agent):
-    def __init__(self, context: str, kb_files: List[KnowledgeFile]) -> None:
-        super().__init__(instructions=build_instructions(context))
-        self.kb_files = kb_files
+    def __init__(self, kb_id: str) -> None:
+        super().__init__(instructions="")  # Leave instructions blank
+        self.kb_id = kb_id
 
-    async def stt_node(self, audio: AsyncIterable[rtc.AudioFrame], model_settings) -> Optional[AsyncIterable[stt.SpeechEvent]]:
-        print("\n🎤 Custom processing audio input for STT...")
-        # Return the async generator from the base class directly, no await
-        return Agent.default.stt_node(self, audio, model_settings)
-    # async def stt_node(self, audio: AsyncIterable[rtc.AudioFrame], model_settings) -> Optional[AsyncIterable[stt.SpeechEvent]]:
-    #     print("\n🎤 Custom processing audio input for STT...")
-    #     base_events = Agent.default.stt_node(self, audio, model_settings)
+    def use_llm(self) -> bool:
+        return True
 
-    #     async def event_wrapper():
-    #         async for event in base_events:
-    #             if event.type == stt.SpeechEventType.FINAL_TRANSCRIPT:
-    #                 transcript = event.alternatives[0].text.lower()
-    #                 if "transfer my call" in transcript:
-    #                     print("⚠️ Keyword 'transfer my call' detected in STT!")
-    #                     # Try to get the agent's session (not guaranteed to work!)
-    #                     if hasattr(self, 'session'):
-    #                         await self.session.generate_reply(
-    #                             instructions="Transferring your call to a human agent now..."
-    #                         )
-    #             yield event
+    async def stt_node(self, audio: AsyncIterable[rtc.AudioFrame], model_settings):
+        print("🎤 Custom STT processing")
+        return super().stt_node(audio, model_settings)
 
-    #     return event_wrapper()
+    async def on_enter(self):
+        print("👋 Sending welcome greeting...")
+        await self.session.generate_reply(
+            user_input="Say hello to the user",
+            instructions="You are a helpful agent. Greet the user."
+        )
 
+    async def on_user_turn_completed(self, turn_ctx: ChatContext, new_message: ChatMessage):
+        user_text = new_message.text_content.strip()
+        print(f"\n🗣️ User: {user_text}")
 
-
-    async def on_user_turn_completed(self, turn_ctx: ChatContext, new_message: ChatMessage) -> None:
-        print("🔄 User turn completed. Processing message...")
-        user_text = new_message.text_content().strip().lower()
-        print(f"🗣️ User said: {user_text}")
-
-        if "transfer my call" in user_text:
+        if "transfer my call" in user_text.lower():
             await self.handle_transfer_request()
+            turn_ctx.responded = True
             return
 
-        rag_context = retrieve_relevant_context(user_text, self.kb_files)
-        turn_ctx.add_message(role="assistant", content=f"(Contextual Info)\n{rag_context}")
-        await self.update_chat_ctx(turn_ctx)
+        session = SessionLocal()
+        try:
+            kb_files = session.query(KnowledgeFile).filter(KnowledgeFile.kb_id == self.kb_id).all()
+        finally:
+            session.close()
+
+        context = retrieve_relevant_context(user_text, kb_files)
+        instructions = build_instructions(context)
+
+        print("💬 Generating LLM response...")
+       
+        turn_ctx.responded = True
 
     async def handle_transfer_request(self):
-        print("📞 Transfer requested. Simulating call transfer to a human agent...")
         await self.session.generate_reply(
-            instructions="I am transferring your call to a human agent now. Please hold..."
+            user_input="transfer my call",
+            instructions="Tell the user you're transferring them to a human."
         )
-        # Here you could add logic to actually transfer the call, if your system supports it
 
+
+
+
+# ---------- Entrypoint ----------
 async def entrypoint(ctx: JobContext):
     room = os.getenv("ROOM", "myroom")
     identity = os.getenv("IDENTITY", "agent-bot")
-    print(f"🎤 Agent joining room: {room}, as identity: {identity}")
-    
-    kb_id = "ff60517228a84e22"
-    print(f"📅 Fetching knowledge files for KB ID: {kb_id}")
+    kb_id = "df639e6aede94487"  # Your knowledge base ID
 
-    session = SessionLocal()
-    try:
-        kb_files = session.query(KnowledgeFile).filter(KnowledgeFile.kb_id == kb_id).all()
-        print(f"📚 Found {len(kb_files)} files in the knowledge base.")
-    finally:
-        session.close()
+    print(f"🎤 Joining room {room} as {identity}")
+    agent = Assistant(kb_id=kb_id)
 
-    user_query = "How does the AI assistant work?"
-    relevant_context = retrieve_relevant_context(user_query, kb_files)
-
-    agent = Assistant(context=relevant_context, kb_files=kb_files)
-
-    # Use an STT node object, not a function
     session_obj = AgentSession(
-        llm=openai.realtime.RealtimeModel(voice="coral"),
-        stt=deepgram.STT(),  # or another STT node object
-        turn_detection=MultilingualModel(), # or EnglishModel()
+        stt=deepgram.STT(),
+        llm=openai.LLM(model="gpt-4o-mini"),
+        tts=openai.TTS(voice="nova"),
         vad=silero.VAD.load(),
+        turn_detection=MultilingualModel(),
     )
-
-    print("✅ Starting agent session in room:", ctx.room)
 
     await session_obj.start(
         room=room,
         agent=agent,
         room_input_options=RoomInputOptions(
             noise_cancellation=noise_cancellation.BVC(),
-        ),
+        )
     )
-    
     await ctx.connect()
-    
 
 
+# ---------- CLI ----------
 if __name__ == "__main__":
     agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
