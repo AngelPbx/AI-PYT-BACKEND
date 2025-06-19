@@ -1,8 +1,9 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float, ForeignKey, func
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float, JSON, BigInteger, ForeignKey, func
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from db.database import Base
-import uuid, enum
+from sqlalchemy.dialects.postgresql import JSONB
+import uuid, enum, time
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.dialects.postgresql import ARRAY
 
@@ -111,3 +112,92 @@ class APIKey(Base):
 
     workspace = relationship("Workspace", back_populates="api_keys")
     user = relationship("User", back_populates="edited_keys")
+
+# Agent Models
+class Agent(Base):
+    __tablename__ = "agents"
+
+    id = Column(String, primary_key=True, index=True, default=lambda: f"{uuid.uuid4().hex[:16]}")
+    version = Column(Integer, default=0)
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=False)
+    name = Column(String, nullable=True)
+    voice_id = Column(String)
+    voice_model = Column(String, nullable=True)
+    fallback_voice_ids = Column(JSON, nullable=True)
+    voice_temperature = Column(Float, default=1.0)
+    voice_speed = Column(Float, default=1.0)
+    volume = Column(Float, default=1.0)
+    responsiveness = Column(Float, default=1.0)
+    interruption_sensitivity = Column(Float, default=1.0)
+    enable_backchannel = Column(Boolean, default=False)
+    backchannel_frequency = Column(Float, default=0.8)
+    backchannel_words = Column(JSON, nullable=True)
+    reminder_trigger_ms = Column(Integer, default=10000)
+    reminder_max_count = Column(Integer, default=1)
+    ambient_sound = Column(String, nullable=True)
+    ambient_sound_volume = Column(Float, default=1.0)
+    language = Column(String, default="en-US")
+    webhook_url = Column(String, nullable=True)
+    boosted_keywords = Column(JSON, nullable=True)
+    opt_out_sensitive_data_storage = Column(Boolean, default=False)
+    opt_in_signed_url = Column(Boolean, default=True)
+    pronunciation_dictionary = Column(JSON, nullable=True)
+    normalize_for_speech = Column(Boolean, default=True)
+    end_call_after_silence_ms = Column(Integer, default=600000)
+    max_call_duration_ms = Column(Integer, default=3600000)
+    voicemail_option = Column(JSON, nullable=True)
+    post_call_analysis_data = Column(JSON, nullable=True)
+    post_call_analysis_model = Column(String, default="gpt-4o-mini")
+    begin_message_delay_ms = Column(Integer, default=1000)
+    ring_duration_ms = Column(Integer, default=30000)
+    stt_mode = Column(String, default="fast")
+    vocab_specialization = Column(String, default="general")
+    allow_user_dtmf = Column(Boolean, default=True)
+    user_dtmf_options = Column(JSON, nullable=True)
+    denoising_mode = Column(String, default="noise-cancellation")
+    last_modification_timestamp = Column(BigInteger, default=lambda: int(time.time() * 1000))
+    is_published = Column(Boolean, default=False)
+    response_engine = Column(JSON)
+
+# PBX LLm
+class PBXLLM(Base):
+    __tablename__ = "pbx_llms"
+
+    id = Column(String, primary_key=True, default=lambda: f"{uuid.uuid4().hex[:24]}")
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=False)
+
+    version = Column(Integer, default=0)
+    model = Column(String, nullable=True)
+    s2s_model = Column(String, nullable=True)
+    model_temperature = Column(Float, default=0.0)
+    model_high_priority = Column(Boolean, default=False)
+    tool_call_strict_mode = Column(Boolean, default=False)
+
+    general_prompt = Column(Text, nullable=True)  # Prefer `Text` for long prompts
+    general_tools = Column(JSON, nullable=True)
+    states = Column(JSON, nullable=True)
+    starting_state = Column(String, nullable=True)
+    begin_message = Column(String, nullable=True)
+    default_dynamic_variables = Column(JSON, nullable=True)
+    knowledge_base_ids = Column(JSON, nullable=True)
+
+    is_published = Column(Boolean, default=False)
+    last_modification_timestamp = Column(BigInteger, default=lambda: int(time.time() * 1000))
+
+# Chat-room
+class ChatSession(Base):
+    __tablename__ = "chat_sessions"
+
+    chat_id = Column(String, primary_key=True, default=lambda: f"{uuid.uuid4().hex[:24]}")
+    agent_id = Column(String, nullable=False)
+    agent_version = Column(Integer, default=0)
+    chat_status = Column(String, default="ongoing")  # ongoing, ended, error
+    retell_llm_dynamic_variables = Column(JSONB, nullable=True)
+    collected_dynamic_variables = Column(JSONB, nullable=True)
+    start_timestamp = Column(BigInteger, nullable=True)
+    end_timestamp = Column(BigInteger, nullable=True)
+    transcript = Column(String, nullable=True)
+    message_with_tool_calls = Column(JSONB, nullable=True)
+    chat_metadata = Column("metadata", JSONB, nullable=True)  # renamed to avoid SQLAlchemy conflict
+    chat_cost = Column(JSONB, nullable=True)
+    chat_analysis = Column(JSONB, nullable=True)

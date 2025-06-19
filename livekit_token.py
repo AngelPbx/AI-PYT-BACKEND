@@ -109,7 +109,7 @@ class Assistant(Agent):
             session.close()
 
         context = retrieve_relevant_context(user_text, kb_files)
-        instructions = build_instructions(context)
+        build_instructions(context)
 
         print("💬 Generating LLM response...")
        
@@ -153,11 +153,19 @@ async def entrypoint(ctx: JobContext):
 
     print(f"🎤 Joining room {room} as {identity}")
     agent = Assistant(kb_id=kb_id)
+    model_meta = json.loads(str(metadata))
+    model_stt = model_meta.get("model_stt", "Not provided")
+    lang_stt = model_meta.get("lang_stt", "Not provided")
+    model_llm = model_meta.get("model_llm", "Not provided")
+    model_tts = model_meta.get("model_tts", "Not provided")
+    voice_tts = model_meta.get("voice_tts", "Not provided")
+    print(f"📦 Agent metadata: {model_meta}")
+
 
     session_obj = AgentSession(
-        stt=deepgram.STT(),
-        llm=openai.LLM(model="gpt-4o-mini"),
-        tts=openai.TTS(voice="nova"),
+        stt=deepgram.STT(model=model_stt, language=lang_stt),
+        llm=openai.LLM(model=model_llm, temperature=0.7, max_tokens=1000),
+        tts=openai.TTS(model=model_tts, voice=voice_tts),
         vad=silero.VAD.load(),
         turn_detection=MultilingualModel(),
     )

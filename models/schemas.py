@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, EmailStr
-from typing import Optional
+from pydantic import BaseModel, Field, EmailStr, field_validator
 from datetime import datetime
+from typing import Optional, List, Literal, Dict, Any
+
 
 class UserSignup(BaseModel):
     username: str = Field(..., min_length=5)
@@ -74,3 +75,208 @@ class WorkspaceSettingsUpdate(BaseModel):
     default_voice: Optional[str] = None
     default_model: Optional[str] = None
     temperature: Optional[float] = None
+
+# Agent schemas----------------------------------------------
+
+class ResponseEngine(BaseModel):
+    type: Literal["pbx-llm", "custom-llm", "conversation-flow"]
+    llm_id: Optional[str] = None
+    version: Optional[int] = None
+    llm_websocket_url: Optional[str] = None
+
+    @field_validator("llm_id")
+    @classmethod
+    def validate_llm_id(cls, v, info):
+        if info.data.get("type") == "pbx-llm" and not v:
+            raise ValueError("llm_id is required for pbx-llm type")
+        return v
+
+    @field_validator("llm_websocket_url")
+    @classmethod
+    def validate_ws_url(cls, v, info):
+        if info.data.get("type") == "custom-llm" and not v:
+            raise ValueError("llm_websocket_url is required for custom-llm type")
+        return v
+
+class VoicemailAction(BaseModel):
+    type: str
+    text: str
+
+class VoicemailOption(BaseModel):
+    action: VoicemailAction
+
+class Pronunciation(BaseModel):
+    word: str
+    alphabet: str
+    phoneme: str
+
+class PostCallAnalysis(BaseModel):
+    type: str
+    name: str
+    description: str
+    examples: List[str]
+
+class UserDTMFOptions(BaseModel):
+    digit_limit: int
+    termination_key: str
+    timeout_ms: int
+
+class AgentCreate(BaseModel):
+    workspace_id: int
+    name: Optional[str] = None
+    version: Optional[int] = 0
+    voice_id: str
+    voice_model: Optional[str] = None
+    fallback_voice_ids: Optional[List[str]] = None
+    voice_temperature: Optional[float] = 1.0
+    voice_speed: Optional[float] = 1.0
+    volume: Optional[float] = 1.0
+    responsiveness: Optional[float] = 1.0
+    interruption_sensitivity: Optional[float] = 1.0
+    enable_backchannel: Optional[bool] = False
+    backchannel_frequency: Optional[float] = 0.8
+    backchannel_words: Optional[List[str]] = None
+    reminder_trigger_ms: Optional[int] = 10000
+    reminder_max_count: Optional[int] = 1
+    ambient_sound: Optional[str] = None
+    ambient_sound_volume: Optional[float] = 1.0
+    language: Optional[str] = "en-US"
+    webhook_url: Optional[str] = None
+    boosted_keywords: Optional[List[str]] = None
+    opt_out_sensitive_data_storage: Optional[bool] = False
+    opt_in_signed_url: Optional[bool] = True
+    pronunciation_dictionary: Optional[List[Pronunciation]] = None
+    normalize_for_speech: Optional[bool] = True
+    end_call_after_silence_ms: Optional[int] = 600000
+    max_call_duration_ms: Optional[int] = 3600000
+    voicemail_option: Optional[VoicemailOption] = None
+    post_call_analysis_data: Optional[List[PostCallAnalysis]] = None
+    post_call_analysis_model: Optional[str] = "gpt-4o-mini"
+    begin_message_delay_ms: Optional[int] = 1000
+    ring_duration_ms: Optional[int] = 30000
+    stt_mode: Optional[str] = "fast"
+    vocab_specialization: Optional[str] = "general"
+    allow_user_dtmf: Optional[bool] = True
+    user_dtmf_options: Optional[UserDTMFOptions] = None
+    denoising_mode: Optional[str] = "noise-cancellation"
+    response_engine: ResponseEngine
+
+class AgentOut(AgentCreate):
+    agent_id: str = Field(..., alias="id")  # ← maps DB's `id` to `agent_id`
+    version: Optional[int] = 0
+    is_published: Optional[bool]
+    last_modification_timestamp: Optional[int]
+
+    class Config:
+        from_attributes = True  # for Pydantic v2
+        validate_by_name = True
+
+
+# PBX LLM SCHEMAS----------------------------------------------
+
+class Tool(BaseModel):
+    type: str
+    name: str
+    description: str
+    transfer_destination: Optional[Dict[str, Any]] = None
+    transfer_option: Optional[Dict[str, Any]] = None
+    cal_api_key: Optional[str] = None
+    event_type_id: Optional[int] = None
+    timezone: Optional[str] = None
+
+class StateEdge(BaseModel):
+    destination_state_name: str
+    description: str
+
+class LLMState(BaseModel):
+    name: str
+    state_prompt: str
+    edges: Optional[List[StateEdge]] = []
+    tools: Optional[List[Tool]] = []
+
+class PBXLLMCreate(BaseModel):
+    workspace_id: int
+    version: Optional[int] = 0
+    model: Optional[str] = None
+    s2s_model: Optional[str] = None
+    model_temperature: Optional[float] = 0.0
+    model_high_priority: Optional[bool] = False
+    tool_call_strict_mode: Optional[bool] = False
+    general_prompt: Optional[str] = None
+    general_tools: Optional[List[Dict[str, Any]]] = None
+    states: Optional[List[Dict[str, Any]]] = None
+    starting_state: Optional[str] = None
+    begin_message: Optional[str] = None
+    default_dynamic_variables: Optional[Dict[str, str]] = None
+    knowledge_base_ids: Optional[List[str]] = None
+
+class PBXLLMOut(BaseModel):
+    id: str
+    workspace_id: int
+    version: int
+    model: Optional[str] = None
+    s2s_model: Optional[str] = None
+    model_temperature: float
+    model_high_priority: bool
+    tool_call_strict_mode: bool
+    general_prompt: Optional[str] = None
+    general_tools: Optional[List[Dict[str, Any]]] = None
+    states: Optional[List[Dict[str, Any]]] = None
+    starting_state: Optional[str] = None
+    begin_message: Optional[str] = None
+    default_dynamic_variables: Optional[Dict[str, str]] = None
+    knowledge_base_ids: Optional[List[str]] = None
+    is_published: bool
+    last_modification_timestamp: int
+
+    class Config:
+        from_attributes = True  
+        validate_by_name = True  
+
+#  Chat room -----------------------------------------------
+
+class MessageWithToolCall(BaseModel):
+    message_id: str
+    role: str
+    content: str
+    created_timestamp: int
+
+
+class ProductCost(BaseModel):
+    product: str
+    unitPrice: float
+    cost: float
+
+
+class ChatCost(BaseModel):
+    product_costs: List[ProductCost]
+    combined_cost: float
+
+
+class ChatAnalysis(BaseModel):
+    chat_summary: str
+    user_sentiment: str
+    chat_successful: bool
+    custom_analysis_data: Optional[Dict[str, Any]] = None
+
+
+class CreateChatRequest(BaseModel):
+    agent_id: str
+    agent_version: Optional[int] = 0
+    metadata: Optional[Dict[str, Any]] = None
+    retell_llm_dynamic_variables: Optional[Dict[str, str]] = None
+
+
+class CreateChatResponse(BaseModel):
+    chat_id: str
+    agent_id: str
+    chat_status: str
+    retell_llm_dynamic_variables: Optional[Dict[str, str]]
+    collected_dynamic_variables: Optional[Dict[str, str]]
+    start_timestamp: Optional[int]
+    end_timestamp: Optional[int]
+    transcript: Optional[str]
+    message_with_tool_calls: Optional[List[MessageWithToolCall]]
+    metadata: Optional[Dict[str, Any]]
+    chat_cost: Optional[ChatCost]
+    chat_analysis: Optional[ChatAnalysis]
