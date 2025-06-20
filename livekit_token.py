@@ -92,7 +92,6 @@ class Assistant(Agent):
             user_input="Say hello to the user",
             instructions="You are a helpful agent. Greet the user."
         )
-
     async def on_user_turn_completed(self, turn_ctx: ChatContext, new_message: ChatMessage):
         user_text = new_message.text_content.strip()
         print(f"\n🗣️ User: {user_text}")
@@ -109,10 +108,13 @@ class Assistant(Agent):
             session.close()
 
         context = retrieve_relevant_context(user_text, kb_files)
-        build_instructions(context)
+        instructions = build_instructions(context)
 
         print("💬 Generating LLM response...")
-       
+        await self.session.generate_reply(
+            user_input=user_text,
+            instructions=instructions
+        )
         turn_ctx.responded = True
 
     async def handle_transfer_request(self):
@@ -164,7 +166,7 @@ async def entrypoint(ctx: JobContext):
 
     session_obj = AgentSession(
         stt=deepgram.STT(model=model_stt, language=lang_stt),
-        llm=openai.LLM(model=model_llm, temperature=0.7, max_tokens=1000),
+        llm=openai.LLM(model=model_llm, temperature=0.7, max_completion_tokens=1000),
         tts=openai.TTS(model=model_tts, voice=voice_tts),
         vad=silero.VAD.load(),
         turn_detection=MultilingualModel(),
