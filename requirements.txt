@@ -4,6 +4,7 @@ fastapi==0.115.13
 jose==1.0.0
 livekit==1.0.9
 livekit-agents[deepgram,openai,cartesia,silero,turn-detector]~=1.0
+livekit-plugins-noise-cancellation==0.2.4
 livekit_api==1.0.2
 livekit_protocol==1.0.3
 numpy==2.3.0
