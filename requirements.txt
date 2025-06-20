@@ -1,8 +1,6 @@
 aiohttp==3.12.13
 beautifulsoup4==4.13.4
-docx==0.2.4
 fastapi==0.115.13
-fitz==0.0.1.dev2
 jose==1.0.0
 livekit==1.0.9
 livekit-agents[deepgram,openai,cartesia,silero,turn-detector]~=1.0
@@ -11,11 +9,17 @@ livekit_protocol==1.0.3
 numpy==2.3.0
 openai==1.88.0
 passlib==1.7.4
+psycopg2==3.2.9
+pydantic[email]==2.11.5
 pydantic==2.11.7
 PyJWT==2.10.1
+python-docx==1.2.0
 python-dotenv==1.1.0
+python-multipart==0.0.20 
 python_jose==3.5.0
 pytz==2025.2
+PyMuPDF==1.26.1
 requests==2.32.4
 SQLAlchemy==2.0.41
 starlette==0.40.0
+uvicorn==0.28.0

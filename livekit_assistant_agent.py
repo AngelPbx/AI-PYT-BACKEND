@@ -1,7 +1,6 @@
 from dotenv import load_dotenv
 from livekit import agents, rtc
 from livekit.agents import AgentSession, Agent, RoomInputOptions, JobContext
-from livekit.agents import stt
 from livekit.agents.llm import ChatContext, ChatMessage
 from livekit.plugins import openai, noise_cancellation, deepgram, silero
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
@@ -12,7 +11,7 @@ from models.models import KnowledgeFile
 
 import numpy as np
 from openai import OpenAI
-from typing import List, AsyncIterable, Optional
+from typing import List, AsyncIterable
 import os, json
 
 # Load environment variables
