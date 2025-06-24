@@ -29,7 +29,7 @@ from db.database import engine
 # end call function
 # pronunciation part done
 # Adding background audio sample done but can't check in local
-# transcript sample done
+# transcript sample done 
 
 # --- Setup ---
 load_dotenv()
@@ -129,24 +129,6 @@ class KBAgent(Agent):
         return self._adjust_volume_in_stream(
             Agent.default.tts_node(self, adjust_pronunciation(text), model_settings)
     )
-
-
-    # async def tts_node(self, text: AsyncIterable[str], model_settings: ModelSettings) -> AsyncIterable[rtc.AudioFrame]:
-    #     pronunciations = {
-    #         "API": "A P I", "book": "Booooooks", "REST": "rest", "SQL": "sequel",
-    #         "kubectl": "kube control", "AWS": "A W S", "UI": "U I", "URL": "U R L",
-    #         "npm": "N P M", "LiveKit": "Live Kit", "async": "a sink", "nginx": "engine x",
-    #     }
-
-    #     async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
-    #         async for chunk in input_text:
-    #             for term, pronunciation in pronunciations.items():
-    #                 chunk = re.sub(rf'\b{term}\b', pronunciation, chunk, flags=re.IGNORECASE)
-    #             yield chunk
-
-    #     async for frame in Agent.default.tts_node(self, adjust_pronunciation(text), model_settings):
-    #         yield frame
-
     @function_tool()
     async def set_volume(self, volume: int):
         """Set the volume of the audio output.
