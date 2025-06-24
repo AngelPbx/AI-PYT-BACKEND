@@ -22,6 +22,13 @@ from livekit.agents import AgentSession, Agent, RoomInputOptions, ModelSettings
 from livekit.plugins import deepgram, openai, silero, noise_cancellation
 from models.models import KnowledgeFile
 from db.database import engine
+from livekit.agents.voice import ModelSettings
+
+# agent knowledgebase done
+# voice control done
+# custom function call for sample done
+# end call function
+# pronunciation part done
 
 # --- Setup ---
 load_dotenv()
