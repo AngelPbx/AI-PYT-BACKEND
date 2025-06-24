@@ -23,6 +23,14 @@ from livekit.plugins import deepgram, openai, silero, noise_cancellation
 from models.models import KnowledgeFile
 from db.database import engine
 
+# agent knowledgebase done
+# voice volume control done
+# custom function call for sample done
+# end call function
+# pronunciation part done
+# Adding background audio sample done but can't check in local
+# transcript sample done
+
 # --- Setup ---
 load_dotenv()
 logger = logging.getLogger("kb-agent")
