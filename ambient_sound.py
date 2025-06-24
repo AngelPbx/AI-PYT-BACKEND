@@ -1,30 +1,27 @@
-import numpy as np
-from typing import AsyncIterable
-from livekit.agents import Agent, function_tool, utils
-from livekit import rtc
-import logging
-import os,time
-import json
-import numpy as np
+import os
 import re
+import json
+import time
+import logging
+import numpy as np
+from typing import AsyncIterable, Optional
 from dataclasses import dataclass
-from typing import Optional, List
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
+import numpy as np
+from livekit.agents import Agent, function_tool, utils
 from openai import OpenAI
-from livekit.agents import JobContext, WorkerOptions, cli
-from livekit.agents.llm import ChatContext, ChatMessage, function_tool
-from livekit.agents.voice import Agent, AgentSession, RunContext
-from livekit.plugins import deepgram, openai, silero
+from livekit import rtc
+from livekit.agents import (
+    JobContext, WorkerOptions, cli, function_tool,
+    BackgroundAudioPlayer, AudioConfig, BuiltinAudioClip,
+    UserInputTranscribedEvent, RunContext
+)
+from livekit.agents import AgentSession, Agent, RoomInputOptions, ModelSettings
+
+from livekit.plugins import deepgram, openai, silero, noise_cancellation
 from models.models import KnowledgeFile
 from db.database import engine
-from livekit.agents.voice import ModelSettings
-
-# agent knowledgebase done
-# voice control done
-# custom function call for sample done
-# end call function
-# pronunciation part done
 
 # --- Setup ---
 load_dotenv()
@@ -39,8 +36,7 @@ def get_embedding(text: str) -> list[float]:
     if not text:
         return []
     response = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=[text]
+        model="text-embedding-3-small", input=[text]
     )
     return response.data[0].embedding
 
@@ -65,7 +61,6 @@ def retrieve_kb_context(query: str, kb_id: str, top_k: int = 3) -> str:
             results.append((score, file.extract_data.strip()))
     finally:
         session.close()
-
     top_chunks = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
     return "\n\n".join(chunk for _, chunk in top_chunks)
 
@@ -75,23 +70,24 @@ class UserData:
     kb_id: str
     persona: str
     ctx: Optional[JobContext] = None
-
     def summarize(self) -> str:
         return f"KB ID: {self.kb_id}, Persona: {self.persona}"
 
-RunContext_T = RunContext[UserData]
+# --- Agent ---
+class KBAgent(Agent):
+    def __init__(self):
+        super().__init__(instructions="Answer only based on the provided KB data. Be concise and helpful.")
+        self.volume: int = 50
 
-# --- Base Agent ---
-class BaseAgent(Agent):
-    async def on_enter(self) -> None:
-        logger.info("Assistant has entered the session.")
+    async def on_enter(self):
+        logger.info("✅ Agent entered session.")
         userdata: UserData = self.session.userdata
         chat_ctx = self.chat_ctx.copy()
 
         kb_context = retrieve_kb_context("introduction", kb_id=userdata.kb_id)
         if not kb_context:
             kb_context = "No relevant knowledge base data found."
-        self.volume: int = 50
+
         chat_ctx.add_message(
             role="system",
             content=(
@@ -102,71 +98,46 @@ class BaseAgent(Agent):
             )
         )
         await self.update_chat_ctx(chat_ctx)
-
-# --- Dynamic Agent ---
-class KBAgent(BaseAgent):
-    def __init__(self, model_llm, model_tts, voice_tts, model_stt, lang_stt):
-        super().__init__(
-            instructions="Answer only based on the provided KB data. Be concise and helpful.",
-            stt=deepgram.STT(model=model_stt, language=lang_stt),
-            llm=openai.LLM(model=model_llm, temperature=0.0),
-            tts=openai.TTS(model=model_tts, voice=voice_tts),
-            vad=silero.VAD.load()
-        )
-
-    async def on_enter(self):
-        await super().on_enter()
         await self.session.say("Hi, thanks for calling Angel PBX. How can I help you?")
-    # async def tts_node(self, text: AsyncIterable[str], model_settings: ModelSettings):
-    #     return self._adjust_volume_in_stream(
-    #         Agent.default.tts_node(self, text, model_settings)
-    # )
 
     async def tts_node(
-    self,
-    text: AsyncIterable[str],
+    self, 
+    text: AsyncIterable[str], 
     model_settings: ModelSettings
 ) -> AsyncIterable[rtc.AudioFrame]:
-        # Pronunciation replacements for common technical terms and abbreviations.
-        # Support for custom pronunciations depends on the TTS provider.
         pronunciations = {
-            "API": "A P I",
-            "book": "Booooooks",
-            "REST": "rest",
-            "SQL": "sequel",
-            "kubectl": "kube control",
-            "AWS": "A W S",
-            "UI": "U I",
-            "URL": "U R L",
-            "npm": "N P M",
-            "LiveKit": "Live Kit",
-            "async": "a sink",
-            "nginx": "engine x",
+            "API": "A P I", "book": "Booooooks", "REST": "rest", "SQL": "sequel",
+            "kubectl": "kube control", "AWS": "A W S", "UI": "U I", "URL": "U R L",
+            "npm": "N P M", "LiveKit": "Live Kit", "async": "a sink", "nginx": "engine x",
         }
-    
+
         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
             async for chunk in input_text:
-                modified_chunk = chunk
-                
-                # Apply pronunciation rules
                 for term, pronunciation in pronunciations.items():
-                    # Use word boundaries to avoid partial replacements
-                    modified_chunk = re.sub(
-                        rf'\b{term}\b',
-                        pronunciation,
-                        modified_chunk,
-                        flags=re.IGNORECASE
-                    )
-                
-                yield modified_chunk
-        
-        # Process with modified text through base TTS implementation
-        async for frame in Agent.default.tts_node(
-            self,
-            adjust_pronunciation(text),
-            model_settings
-        ):
-            yield frame
+                    chunk = re.sub(rf'\b{term}\b', pronunciation, chunk, flags=re.IGNORECASE)
+                yield chunk
+
+        # 👇 Chain both: apply pronunciation, then volume control
+        return self._adjust_volume_in_stream(
+            Agent.default.tts_node(self, adjust_pronunciation(text), model_settings)
+    )
+
+
+    # async def tts_node(self, text: AsyncIterable[str], model_settings: ModelSettings) -> AsyncIterable[rtc.AudioFrame]:
+    #     pronunciations = {
+    #         "API": "A P I", "book": "Booooooks", "REST": "rest", "SQL": "sequel",
+    #         "kubectl": "kube control", "AWS": "A W S", "UI": "U I", "URL": "U R L",
+    #         "npm": "N P M", "LiveKit": "Live Kit", "async": "a sink", "nginx": "engine x",
+    #     }
+
+    #     async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
+    #         async for chunk in input_text:
+    #             for term, pronunciation in pronunciations.items():
+    #                 chunk = re.sub(rf'\b{term}\b', pronunciation, chunk, flags=re.IGNORECASE)
+    #             yield chunk
+
+    #     async for frame in Agent.default.tts_node(self, adjust_pronunciation(text), model_settings):
+    #         yield frame
 
     @function_tool()
     async def set_volume(self, volume: int):
@@ -215,19 +186,15 @@ class KBAgent(BaseAgent):
             num_channels=frame.num_channels,
             samples_per_channel=len(processed) // frame.num_channels,
         )
-    
-    # to hang up the call as part of a function call
+
     @function_tool
-    async def end_call(self, ctx: RunContext):
-        """Use this tool when the user has signaled they wish to end the current call. The session will end automatically after invoking this tool."""
-        # let the agent finish speaking
+    async def end_call(self, ctx: RunContext[UserData]):
         current_speech = ctx.session.current_speech
         if current_speech:
             await current_speech.wait_for_playout()
 
     @function_tool
     async def transfer_to_human(self):
-        """Use this function to transfer the user to a human agent. Only when user say transfer or someone else"""
         await self.session.say("Transferring you to a human representative. Please hold.")
         logger.info("✅ Transferring...")
 
@@ -240,32 +207,48 @@ async def entrypoint(ctx: JobContext):
     except Exception as e:
         raise RuntimeError(f"❌ Invalid ROOM_METADATA JSON in env: {e}")
 
-    # Extract all values from the metadata
     kb_id = metadata.get("kb_id")
-    model_llm = metadata.get("model_llm", "gpt-4o-mini")
-    model_tts = metadata.get("model_tts", "gpt-4o-mini-tts")
-    voice_tts = metadata.get("voice_tts", "nova")
-    model_stt = metadata.get("model_stt", "nova-3")
-    lang_stt = metadata.get("lang_stt", "multi")
-    persona = metadata.get("AGENT_PERSONA", "You are a helpful AI assistant.")
-
     if not kb_id:
         raise RuntimeError("❌ kb_id is required in ROOM_METADATA environment variable.")
-
-    logger.info("✅ Loaded from env: kb_id=%s, llm=%s, tts=%s, voice=%s, stt=%s, lang=%s",
-                kb_id, model_llm, model_tts, voice_tts, model_stt, lang_stt)
-
+    persona = metadata.get("AGENT_PERSONA", "You are a helpful AI assistant.")
 
     userdata = UserData(kb_id=kb_id, persona=persona, ctx=ctx)
-    session = AgentSession[UserData](userdata=userdata)
 
-    agent = KBAgent(model_llm, model_tts, voice_tts, model_stt, lang_stt)
-    await session.start(agent=agent, room=ctx.room.name)
-    
+    session = AgentSession(
+        userdata=userdata,
+        llm=openai.LLM(model=metadata.get("model_llm", "gpt-4o-mini")),
+        tts=openai.TTS(
+            model=metadata.get("model_tts", "gpt-4o-mini-tts"),
+            voice=metadata.get("voice_tts", "nova")
+        ),
+        stt=deepgram.STT(
+            model=metadata.get("model_stt", "nova-3"),
+            language=metadata.get("lang_stt", "multi")
+        ),
+        vad=silero.VAD.load(),
+       
+    )
 
-# --- CLI Launcher ---
+    # Optional: Handle events like transcription
+    @session.on("user_input_transcribed")
+    def on_transcribed(event: UserInputTranscribedEvent):
+        print(f"[📝 Transcript] {event.transcript} (final={event.is_final})")
+
+    # Optional: Background audio
+    background_audio = BackgroundAudioPlayer(
+        ambient_sound=AudioConfig(BuiltinAudioClip.OFFICE_AMBIENCE, volume=0.8),
+        thinking_sound=[
+            AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.8),
+            AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.7),
+        ],
+    )
+
+    await session.start(agent=KBAgent(),room=ctx.room,
+                         room_input_options=RoomInputOptions(
+            noise_cancellation=noise_cancellation.BVC()
+        ))
+    await background_audio.start(agent_session=session, room=ctx.room)
+
+# --- CLI ---
 if __name__ == "__main__":
     cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
-
-
-    
