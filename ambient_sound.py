@@ -3,17 +3,15 @@ from typing import AsyncIterable
 from livekit.agents import Agent, function_tool, utils
 from livekit import rtc
 import logging
-import os
-import time
+import os,time
 import json
 import numpy as np
+import re
 from dataclasses import dataclass
 from typing import Optional, List
-
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
 from openai import OpenAI
-
 from livekit.agents import JobContext, WorkerOptions, cli
 from livekit.agents.llm import ChatContext, ChatMessage, function_tool
 from livekit.agents.voice import Agent, AgentSession, RunContext
@@ -21,6 +19,13 @@ from livekit.plugins import deepgram, openai, silero
 from models.models import KnowledgeFile
 from db.database import engine
 from livekit.agents.voice import ModelSettings
+
+# agent knowledgebase done
+# voice control done
+# custom function call for sample done
+# end call function
+# pronunciation part done
+
 # --- Setup ---
 load_dotenv()
 logger = logging.getLogger("kb-agent")
@@ -112,10 +117,56 @@ class KBAgent(BaseAgent):
     async def on_enter(self):
         await super().on_enter()
         await self.session.say("Hi, thanks for calling Angel PBX. How can I help you?")
-    async def tts_node(self, text: AsyncIterable[str], model_settings: ModelSettings):
-        return self._adjust_volume_in_stream(
-            Agent.default.tts_node(self, text, model_settings)
-    )
+    # async def tts_node(self, text: AsyncIterable[str], model_settings: ModelSettings):
+    #     return self._adjust_volume_in_stream(
+    #         Agent.default.tts_node(self, text, model_settings)
+    # )
+
+    async def tts_node(
+    self,
+    text: AsyncIterable[str],
+    model_settings: ModelSettings
+) -> AsyncIterable[rtc.AudioFrame]:
+        # Pronunciation replacements for common technical terms and abbreviations.
+        # Support for custom pronunciations depends on the TTS provider.
+        pronunciations = {
+            "API": "A P I",
+            "book": "Booooooks",
+            "REST": "rest",
+            "SQL": "sequel",
+            "kubectl": "kube control",
+            "AWS": "A W S",
+            "UI": "U I",
+            "URL": "U R L",
+            "npm": "N P M",
+            "LiveKit": "Live Kit",
+            "async": "a sink",
+            "nginx": "engine x",
+        }
+    
+        async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
+            async for chunk in input_text:
+                modified_chunk = chunk
+                
+                # Apply pronunciation rules
+                for term, pronunciation in pronunciations.items():
+                    # Use word boundaries to avoid partial replacements
+                    modified_chunk = re.sub(
+                        rf'\b{term}\b',
+                        pronunciation,
+                        modified_chunk,
+                        flags=re.IGNORECASE
+                    )
+                
+                yield modified_chunk
+        
+        # Process with modified text through base TTS implementation
+        async for frame in Agent.default.tts_node(
+            self,
+            adjust_pronunciation(text),
+            model_settings
+        ):
+            yield frame
 
     @function_tool()
     async def set_volume(self, volume: int):
@@ -164,6 +215,15 @@ class KBAgent(BaseAgent):
             num_channels=frame.num_channels,
             samples_per_channel=len(processed) // frame.num_channels,
         )
+    
+    # to hang up the call as part of a function call
+    @function_tool
+    async def end_call(self, ctx: RunContext):
+        """Use this tool when the user has signaled they wish to end the current call. The session will end automatically after invoking this tool."""
+        # let the agent finish speaking
+        current_speech = ctx.session.current_speech
+        if current_speech:
+            await current_speech.wait_for_playout()
 
     @function_tool
     async def transfer_to_human(self):
@@ -201,6 +261,7 @@ async def entrypoint(ctx: JobContext):
 
     agent = KBAgent(model_llm, model_tts, voice_tts, model_stt, lang_stt)
     await session.start(agent=agent, room=ctx.room.name)
+    
 
 # --- CLI Launcher ---
 if __name__ == "__main__":
