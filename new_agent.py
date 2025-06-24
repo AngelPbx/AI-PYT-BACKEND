@@ -1,3 +1,7 @@
+import numpy as np
+from typing import AsyncIterable
+from livekit.agents import Agent, function_tool, utils
+from livekit import rtc
 import logging
 import os
 import time
@@ -16,7 +20,7 @@ from livekit.agents.voice import Agent, AgentSession, RunContext
 from livekit.plugins import deepgram, openai, silero
 from models.models import KnowledgeFile
 from db.database import engine
-
+from livekit.agents.voice import ModelSettings
 # --- Setup ---
 load_dotenv()
 logger = logging.getLogger("kb-agent")
@@ -82,13 +86,14 @@ class BaseAgent(Agent):
         kb_context = retrieve_kb_context("introduction", kb_id=userdata.kb_id)
         if not kb_context:
             kb_context = "No relevant knowledge base data found."
-
+        self.volume: int = 50
         chat_ctx.add_message(
             role="system",
             content=(
                 f"{userdata.persona}\n\n"
                 f"ONLY answer using this knowledge base:\n{kb_context}\n\n"
                 "If the answer is not in the knowledge base, say: 'I'm sorry, I don't know that.'"
+                f"Your starting volume level is {self.volume}"
             )
         )
         await self.update_chat_ctx(chat_ctx)
@@ -107,6 +112,58 @@ class KBAgent(BaseAgent):
     async def on_enter(self):
         await super().on_enter()
         await self.session.say("Hi, thanks for calling Angel PBX. How can I help you?")
+    async def tts_node(self, text: AsyncIterable[str], model_settings: ModelSettings):
+        return self._adjust_volume_in_stream(
+            Agent.default.tts_node(self, text, model_settings)
+    )
+
+    @function_tool()
+    async def set_volume(self, volume: int):
+        """Set the volume of the audio output.
+
+        Args:
+            volume (int): The volume level to set. Must be between 0 and 100.
+        """
+        self.volume = volume
+
+    # Audio node used by realtime models
+    async def realtime_audio_output_node(
+        self, audio: AsyncIterable[rtc.AudioFrame], model_settings: ModelSettings
+    ) -> AsyncIterable[rtc.AudioFrame]:
+        return self._adjust_volume_in_stream(
+            Agent.default.realtime_audio_output_node(self, audio, model_settings)
+        )
+
+    async def _adjust_volume_in_stream(
+        self, audio: AsyncIterable[rtc.AudioFrame]
+    ) -> AsyncIterable[rtc.AudioFrame]:
+        stream: utils.audio.AudioByteStream | None = None
+        async for frame in audio:
+            if stream is None:
+                stream = utils.audio.AudioByteStream(
+                    sample_rate=frame.sample_rate,
+                    num_channels=frame.num_channels,
+                    samples_per_channel=frame.sample_rate // 10,  # 100ms
+                )
+            for f in stream.push(frame.data):
+                yield self._adjust_volume_in_frame(f)
+
+        if stream is not None:
+            for f in stream.flush():
+                yield self._adjust_volume_in_frame(f)
+
+    def _adjust_volume_in_frame(self, frame: rtc.AudioFrame) -> rtc.AudioFrame:
+        audio_data = np.frombuffer(frame.data, dtype=np.int16)
+        audio_float = audio_data.astype(np.float32) / np.iinfo(np.int16).max
+        audio_float = audio_float * max(0, min(self.volume, 100)) / 100.0
+        processed = (audio_float * np.iinfo(np.int16).max).astype(np.int16)
+
+        return rtc.AudioFrame(
+            data=processed.tobytes(),
+            sample_rate=frame.sample_rate,
+            num_channels=frame.num_channels,
+            samples_per_channel=len(processed) // frame.num_channels,
+        )
 
     @function_tool
     async def transfer_to_human(self):
@@ -148,3 +205,6 @@ async def entrypoint(ctx: JobContext):
 # --- CLI Launcher ---
 if __name__ == "__main__":
     cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+
+
+    
