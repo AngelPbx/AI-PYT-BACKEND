@@ -1,7 +1,6 @@
 import logging
 import os
 import time
-import json
 import numpy as np
 from dataclasses import dataclass
 from typing import Optional, List
@@ -64,11 +63,10 @@ def retrieve_kb_context(query: str, kb_id: str, top_k: int = 3) -> str:
 @dataclass
 class UserData:
     kb_id: str
-    persona: str
     ctx: Optional[JobContext] = None
 
     def summarize(self) -> str:
-        return f"KB ID: {self.kb_id}, Persona: {self.persona}"
+        return f"Agent grounded on KB ID: {self.kb_id}"
 
 RunContext_T = RunContext[UserData]
 
@@ -83,24 +81,28 @@ class BaseAgent(Agent):
         if not kb_context:
             kb_context = "No relevant knowledge base data found."
 
+        # Inject strict KB-only prompt
         chat_ctx.add_message(
             role="system",
             content=(
-                f"{userdata.persona}\n\n"
-                f"ONLY answer using this knowledge base:\n{kb_context}\n\n"
-                "If the answer is not in the knowledge base, say: 'I'm sorry, I don't know that.'"
+                f"You are a helpful assistant. ONLY answer using the following knowledge base:\n\n"
+                f"{kb_context}\n\n"
+                "If the answer is not in the knowledge base, respond with: 'I'm sorry, I don't know that.'"
             )
         )
         await self.update_chat_ctx(chat_ctx)
 
-# --- Dynamic Agent ---
+# --- Knowledge Base Agent ---
 class KBAgent(BaseAgent):
-    def __init__(self, model_llm, model_tts, voice_tts, model_stt, lang_stt):
+    def __init__(self):
         super().__init__(
             instructions="Answer only based on the provided KB data. Be concise and helpful.",
-            stt=deepgram.STT(model=model_stt, language=lang_stt),
-            llm=openai.LLM(model=model_llm, temperature=0.0),
-            tts=openai.TTS(model=model_tts, voice=voice_tts),
+            stt=deepgram.STT(),
+            llm=openai.LLM(
+                model="gpt-4o-mini",
+                temperature=0.0,
+            ),
+            tts=openai.TTS(),
             vad=silero.VAD.load()
         )
 
@@ -110,40 +112,28 @@ class KBAgent(BaseAgent):
 
     @function_tool
     async def transfer_to_human(self):
-        """Use this function to transfer the user to a human agent. Only when user say transfer or someone else"""
+        """Use this function to transfer the user to a human agent."""
         await self.session.say("Transferring you to a human representative. Please hold.")
-        logger.info("✅ Transferring...")
+        logger.info("✅ Triggered transfer request.")
+
+    # async def on_user_turn_completed(self, turn_ctx: ChatContext, new_message: ChatMessage):
+    #     user_text = new_message.text_content.strip().lower()
+
+    #     if "transfer" in user_text or "someone else" in user_text:
+    #         await self.transfer_to_human()
+    #         return
+
+    #     await self.session.say(text=user_text)
 
 # --- Entrypoint ---
 async def entrypoint(ctx: JobContext):
-    await ctx.connect()
+    kb_id = "df639e6aede94487"  # ✅ Set your actual KB ID
+    userdata = UserData(kb_id=kb_id, ctx=ctx)
 
-    try:
-        metadata = json.loads(os.getenv("ROOM_METADATA", "{}"))
-    except Exception as e:
-        raise RuntimeError(f"❌ Invalid ROOM_METADATA JSON in env: {e}")
-
-    # Extract all values from the metadata
-    kb_id = metadata.get("kb_id")
-    model_llm = metadata.get("model_llm", "gpt-4o-mini")
-    model_tts = metadata.get("model_tts", "gpt-4o-mini-tts")
-    voice_tts = metadata.get("voice_tts", "nova")
-    model_stt = metadata.get("model_stt", "nova-3")
-    lang_stt = metadata.get("lang_stt", "multi")
-    persona = metadata.get("AGENT_PERSONA", "You are a helpful AI assistant.")
-
-    if not kb_id:
-        raise RuntimeError("❌ kb_id is required in ROOM_METADATA environment variable.")
-
-    logger.info("✅ Loaded from env: kb_id=%s, llm=%s, tts=%s, voice=%s, stt=%s, lang=%s",
-                kb_id, model_llm, model_tts, voice_tts, model_stt, lang_stt)
-
-
-    userdata = UserData(kb_id=kb_id, persona=persona, ctx=ctx)
     session = AgentSession[UserData](userdata=userdata)
+    agent = KBAgent()
 
-    agent = KBAgent(model_llm, model_tts, voice_tts, model_stt, lang_stt)
-    await session.start(agent=agent, room=ctx.room.name)
+    await session.start(agent=agent, room="ankit")
 
 # --- CLI Launcher ---
 if __name__ == "__main__":

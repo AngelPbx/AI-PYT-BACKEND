@@ -3,16 +3,16 @@ import time
 import jwt
 import json
 from aiohttp import ClientSession
-
+import os
 # LiveKit credentials
-LIVEKIT_URL="https://trial-agent-m3zdvur5.livekit.cloud"
-API_KEY="APIGp7PPyuhzxA6"
-API_SECRET="MhfVPdp7vSFJelweQlXJfJS6rJs4OqjL6qfecGUEjuTD"
+LIVEKIT_URL = os.getenv('LIVEKIT_URL') # Ensure this env var is set
+LIVEKIT_API_KEY = os.getenv('LIVEKIT_API_KEY') # Ensure this env var is set
+LIVEKIT_API_SECRET = os.getenv('LIVEKIT_API_SECRET')
 
 def generate_admin_token():
     now = int(time.time()) - 3000
     payload = {
-        "iss": API_KEY,
+        "iss": LIVEKIT_API_KEY,
         "aud": "livekit",
         "sub": "admin",
         "iat": now - 3000,
@@ -25,7 +25,7 @@ def generate_admin_token():
     # if room_name:
     #     payload["sub"] = identity  # ✅ Include only if needed
     #     payload["room"] = room_name  # ✅ Include only if needed
-    return jwt.encode(payload, API_SECRET, algorithm="HS256")
+    return jwt.encode(payload, LIVEKIT_API_SECRET, algorithm="HS256")
 
 def pretty_print(title, data):
     print(f"\n==> {title}")
@@ -75,7 +75,7 @@ async def list_rooms():
                 print(f"\n Error listing rooms ({resp.status}):\n{await resp.text()}")
 
 if __name__ == "__main__":
-    asyncio.run(list_rooms())
-    # asyncio.run(create_room())
+    # asyncio.run(list_rooms())
+    asyncio.run(create_room())
     
     #in this code the room is created and listed using the LiveKit API. what i want to do is whenever a participant joins the room, auto
