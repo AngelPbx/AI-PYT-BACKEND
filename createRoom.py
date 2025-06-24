@@ -41,12 +41,10 @@ async def create_room():
     }
 
     payload = {
-        "name": "ankit",
-        "empty_timeout": 600,
+        "name": "new-ankit-6000",
+        "empty_timeout": 6000,
         "max_participants": 10,
-         "metadata": json.dumps({
-            "kb_id": "df639e6aede94487"  # 👈 Pass your dynamic KB ID here
-        })
+         "metadata": json.dumps({"kb_id": "df639e6aede94487","model_stt": "nova-3","lang_stt": "multi","model_llm": "gpt-4o-mini","model_tts": "gpt-4o-mini-tts","voice_tts": "nova", "AGENT_PERSONA": "You are a Doctor AI assistant."})
     }
     #create room
     async with ClientSession() as session:
@@ -75,7 +73,7 @@ async def list_rooms():
                 print(f"\n Error listing rooms ({resp.status}):\n{await resp.text()}")
 
 if __name__ == "__main__":
-    # asyncio.run(list_rooms())
-    asyncio.run(create_room())
+    asyncio.run(list_rooms())
+    # asyncio.run(create_room())
     
     #in this code the room is created and listed using the LiveKit API. what i want to do is whenever a participant joins the room, auto

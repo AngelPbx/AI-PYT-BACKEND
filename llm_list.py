@@ -1,32 +1,16 @@
 import asyncio
-from livekit.api import LiveKitAPI, CreateRoomRequest
-import os
 
+from livekit import api
+from livekit.protocol.sip import ListSIPInboundTrunkRequest
 
-async def create_room():
-    LIVEKIT_URL = os.getenv('LIVEKIT_URL')
-    LIVEKIT_API_KEY = os.getenv('LIVEKIT_API_KEY')
-    LIVEKIT_API_SECRET = os.getenv('LIVEKIT_API_SECRET')
+async def main():
+  livekit_api = api.LiveKitAPI()
 
-    # ✅ Move inside async block
-    lkapi = LiveKitAPI(
-        url=LIVEKIT_URL,
-        api_key=LIVEKIT_API_KEY,
-        api_secret=LIVEKIT_API_SECRET,
-    )
+  rules = await livekit_api.sip.list_sip_inbound_trunk(
+    ListSIPInboundTrunkRequest()
+  )
+  print(f"{rules}")
 
-    room_service = lkapi.room
-    room_name = "my_new_room"
+  await livekit_api.aclose()
 
-    room_info = await room_service.create_room(
-        CreateRoomRequest(
-            name=room_name,
-            empty_timeout=10 * 60,
-            max_participants=20
-        )
-    )
-    print(f"✅ Room created: {room_info.name}, SID: {room_info.sid}")
-
-
-# ✅ Run inside async context
-asyncio.run(create_room())
+asyncio.run(main())
