@@ -14,11 +14,15 @@ import time
 from typing import List
 from sqlalchemy.orm import sessionmaker, Session
 from db.database import get_db, get_current_user
-from models.models import User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, KnowledgeFile, APIKey, FileStatus, SourceStatus, Agent, PBXLLM, ChatSession
+from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, 
+                           KnowledgeFile, APIKey, FileStatus, SourceStatus, pbx_ai_agent, PBXLLM, 
+                           ChatSession, LLMVoice, ImportedPhoneNumber
+                           )
 from models.schemas import (
     UserSignup, UserLogin, UpdateUser,
-    WorkspaceCreate, WorkspaceOut, InviteMember,
-    WorkspaceSettingsUpdate, KnowledgeBaseCreate, AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, CreateChatRequest, CreateChatResponse
+    WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, KnowledgeBaseCreate, 
+    AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, CreateChatRequest, CreateChatResponse,
+    VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut
 )
 from utils.helpers import (
     format_response, validate_email,
@@ -1405,9 +1409,9 @@ def create_agent(
     if not is_user_in_workspace(current_user.id, payload.workspace_id, db):
         raise HTTPException(status_code=403, detail="You do not have access to this workspace")
 
-    agent = Agent(
+    agent = pbx_ai_agent(
         workspace_id=payload.workspace_id,
-        name=payload.agent_name,
+        name=payload.name,
         voice_id=payload.voice_id,
         voice_model=payload.voice_model,
         fallback_voice_ids=payload.fallback_voice_ids,
@@ -1468,9 +1472,9 @@ def list_agents(
     if not is_user_in_workspace(current_user.id, workspace_id, db):
         raise HTTPException(status_code=403, detail="You do not have access to this workspace")
 
-    agents = db.query(Agent).filter(Agent.workspace_id == workspace_id).all()
+    agents = db.query(pbx_ai_agent).filter(pbx_ai_agent.workspace_id == workspace_id).all()
+    # print(db.query(pbx_ai_agent).all())
     return agents
-
 
 @router.get("/agents/{agent_id}", response_model=AgentOut)
 def get_agent(
@@ -1479,7 +1483,7 @@ def get_agent(
     current_user: User = Depends(get_current_user)
 ):
     # Fetch the agent by ID
-    agent = db.query(Agent).filter(Agent.id == agent_id).first()
+    agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == agent_id).first()
 
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
@@ -1558,11 +1562,18 @@ def create_chat(payload: CreateChatRequest, db: Session = Depends(get_db)):
         chat = ChatSession(
             agent_id=payload.agent_id,
             agent_version=payload.agent_version or 0,
-            chat_status="ongoing",
+            chat_status=payload.chat_status,
             retell_llm_dynamic_variables=payload.retell_llm_dynamic_variables,
+            collected_dynamic_variables={},
             chat_metadata=payload.metadata,
-            start_timestamp=int(time.time() * 1000)
+            start_timestamp=payload.start_timestamp,
+            end_timestamp=payload.end_timestamp,
+            transcript=payload.transcript or "null",
+            message_with_tool_calls=[],  # ensure it's a list of dicts or JSON-serializable
+            chat_cost=payload.chat_cost.model_dump() if payload.chat_cost else None,
+            chat_analysis=payload.chat_analysis.model_dump() if payload.chat_analysis else None
         )
+
         db.add(chat)
         db.commit()
         db.refresh(chat)
@@ -1583,3 +1594,93 @@ def create_chat(payload: CreateChatRequest, db: Session = Depends(get_db)):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+# voice
+@router.post("/llm-voice", response_model=VoiceOut)
+def create_voice(
+    payload: VoiceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)  # optional if you want auth
+):
+    existing = db.query(LLMVoice).filter_by(voice_id=payload.voice_id).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Voice ID already exists")
+    
+    voice = LLMVoice(**payload.dict())
+    db.add(voice)
+    db.commit()
+    db.refresh(voice)
+    return voice
+
+
+@router.get("/llm-voice/{voice_id}", response_model=VoiceOut)
+def get_voice(
+    voice_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)  # optional
+):
+    voice = db.query(LLMVoice).filter_by(voice_id=voice_id).first()
+    if not voice:
+        raise HTTPException(status_code=404, detail="Voice not found")
+    return voice
+
+
+@router.get("/all-voices", response_model=List[VoiceOut])
+def list_voices(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)  # optional
+):
+    voices = db.query(LLMVoice).all()
+    return voices
+
+#import phone
+@router.post("/import-phone-number", response_model=PhoneNumberOut, status_code=201)
+def import_phone_number(
+    payload: PhoneNumberCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)  # optional
+):
+    existing = db.query(ImportedPhoneNumber).filter_by(phone_number=payload.phone_number).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Phone number already exists")
+
+    area_code = int(payload.phone_number[2:5])
+    pretty = f"+1 ({payload.phone_number[2:5]}) {payload.phone_number[5:8]}-{payload.phone_number[8:]}"
+    timestamp = int(time.time() * 1000)
+
+    phone = ImportedPhoneNumber(
+        phone_number=payload.phone_number,
+        phone_number_type=payload.phone_number_type,
+        phone_number_pretty=pretty,
+        inbound_agent_id=payload.inbound_agent_id,
+        outbound_agent_id=payload.outbound_agent_id,
+        inbound_agent_version=payload.inbound_agent_version,
+        outbound_agent_version=payload.outbound_agent_version,
+        area_code=area_code,
+        nickname=payload.nickname,
+        inbound_webhook_url=payload.inbound_webhook_url,
+        last_modification_timestamp=timestamp,
+    )
+
+    db.add(phone)
+    db.commit()
+    db.refresh(phone)
+    return phone
+
+@router.get("/import-phone-number/{phone_number}", response_model=PhoneNumberOut)
+def get_phone_number(
+    phone_number: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)  # optional
+):
+    phone = db.query(ImportedPhoneNumber).filter_by(phone_number=phone_number).first()
+    if not phone:
+        raise HTTPException(status_code=404, detail="Phone number not found")
+    return phone
+
+@router.get("/all-import-phone-number", response_model=List[PhoneNumberOut])
+def list_phone_numbers(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)  # optional
+):
+    return db.query(ImportedPhoneNumber).all()

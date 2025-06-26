@@ -24,3 +24,4 @@ requests==2.32.4
 SQLAlchemy==2.0.41
 starlette==0.40.0
 uvicorn==0.28.0
+bcrypt==4.3.0

@@ -262,21 +262,74 @@ class ChatAnalysis(BaseModel):
 
 class CreateChatRequest(BaseModel):
     agent_id: str
+    chat_status: str
     agent_version: Optional[int] = 0
     metadata: Optional[Dict[str, Any]] = None
     retell_llm_dynamic_variables: Optional[Dict[str, str]] = None
+    start_timestamp: Optional[int] = None
+    end_timestamp: Optional[int] = None
+    transcript: Optional[str] = None
+    chat_cost: Optional[ChatCost] = None
+    chat_analysis: Optional[ChatAnalysis] = None
 
 
 class CreateChatResponse(BaseModel):
     chat_id: str
     agent_id: str
     chat_status: str
-    retell_llm_dynamic_variables: Optional[Dict[str, str]]
-    collected_dynamic_variables: Optional[Dict[str, str]]
-    start_timestamp: Optional[int]
-    end_timestamp: Optional[int]
-    transcript: Optional[str]
-    message_with_tool_calls: Optional[List[MessageWithToolCall]]
-    metadata: Optional[Dict[str, Any]]
-    chat_cost: Optional[ChatCost]
-    chat_analysis: Optional[ChatAnalysis]
+    retell_llm_dynamic_variables: Optional[Dict[str, str]] = None
+    collected_dynamic_variables: Optional[Dict[str, str]] = None
+    start_timestamp: Optional[int] = None
+    end_timestamp: Optional[int] = None
+    transcript: Optional[str] = None
+    message_with_tool_calls: Optional[List[MessageWithToolCall]] = None
+    metadata: Optional[Dict[str, Any]] = None
+    chat_cost: Optional[ChatCost] = None
+    chat_analysis: Optional[ChatAnalysis] = None
+
+# voice
+
+class VoiceBase(BaseModel):
+    voice_id: str
+    voice_name: str
+    provider: Literal["elevenlabs", "openai", "deepgram"]
+    gender: Literal["male", "female"]
+    accent: Optional[str] = None
+    age: Optional[str] = None
+    preview_audio_url: Optional[str] = None
+
+class VoiceCreate(VoiceBase):
+    pass
+
+class VoiceOut(VoiceBase):
+    pass
+
+#import phone
+class PhoneNumberCreate(BaseModel):
+    phone_number: str
+    phone_number_type: str
+    sip_trunk_auth_username: Optional[str] = None
+    sip_trunk_auth_password: Optional[str] = None
+    inbound_agent_id: Optional[str] = None
+    outbound_agent_id: Optional[str] = None
+    inbound_agent_version: Optional[int] = None
+    outbound_agent_version: Optional[int] = None
+    nickname: Optional[str] = None
+    inbound_webhook_url: Optional[str] = None
+
+class PhoneNumberOut(BaseModel):
+    id: int
+    phone_number: str
+    phone_number_type: str
+    phone_number_pretty: str
+    inbound_agent_id: Optional[str]
+    outbound_agent_id: Optional[str]
+    inbound_agent_version: Optional[int]
+    outbound_agent_version: Optional[int]
+    area_code: int
+    nickname: Optional[str]
+    inbound_webhook_url: Optional[str]
+    last_modification_timestamp: int
+
+    class Config:
+        orm_mode = True
