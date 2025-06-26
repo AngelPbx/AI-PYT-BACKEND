@@ -1,28 +1,25 @@
-import os
-import re
-import json
-import time
-import logging
+import logging, os, re, json
 import numpy as np
 from typing import AsyncIterable, Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
-import numpy as np
-from livekit.agents import Agent, function_tool, utils
 from openai import OpenAI
 from livekit import rtc
 from livekit.agents import (
     JobContext, WorkerOptions, cli, function_tool,
     BackgroundAudioPlayer, AudioConfig, BuiltinAudioClip,
-    UserInputTranscribedEvent, RunContext
+    UserInputTranscribedEvent, RunContext, AgentSession, Agent, RoomInputOptions, ModelSettings, function_tool, utils
 )
-from livekit.agents import AgentSession, Agent, RoomInputOptions, ModelSettings
-
 from livekit.plugins import deepgram, openai, silero, noise_cancellation
 from models.models import KnowledgeFile
 from db.database import engine
+<<<<<<< HEAD
 from livekit.agents.voice import ModelSettings
+=======
+import httpx
+import time
+>>>>>>> 257dedcdad0baf38045393b549625d80819875c1
 
 # agent knowledgebase done
 # voice control done
@@ -32,8 +29,12 @@ from livekit.agents.voice import ModelSettings
 <<<<<<< HEAD
 =======
 # Adding background audio sample done but can't check in local
+<<<<<<< HEAD
 # transcript sample done 
 >>>>>>> 939c321d1aebda5f637e754d536c91226123fb58
+=======
+# transcript with data stored in chat table in db done 
+>>>>>>> 257dedcdad0baf38045393b549625d80819875c1
 
 # --- Setup ---
 load_dotenv()
@@ -82,6 +83,7 @@ class UserData:
     kb_id: str
     persona: str
     ctx: Optional[JobContext] = None
+    start_timestamp: Optional[int] = None
     def summarize(self) -> str:
         return f"KB ID: {self.kb_id}, Persona: {self.persona}"
 
@@ -90,10 +92,11 @@ class KBAgent(Agent):
     def __init__(self):
         super().__init__(instructions="Answer only based on the provided KB data. Be concise and helpful.")
         self.volume: int = 50
+        self.transcript_log: list[str] = []
 
     async def on_enter(self):
-        logger.info("✅ Agent entered session.")
         userdata: UserData = self.session.userdata
+        userdata.start_timestamp = int(time.time() * 1000)
         chat_ctx = self.chat_ctx.copy()
 
         kb_context = retrieve_kb_context("introduction", kb_id=userdata.kb_id)
@@ -179,54 +182,178 @@ class KBAgent(Agent):
             sample_rate=frame.sample_rate,
             num_channels=frame.num_channels,
             samples_per_channel=len(processed) // frame.num_channels,
-        )
+        )     
 
     @function_tool
-    async def end_call(self, ctx: RunContext[UserData]):
-        current_speech = ctx.session.current_speech
-        if current_speech:
-            await current_speech.wait_for_playout()
+    async def end_call(self, ctx: RunContext[UserData]):     
+        if ctx.userdata.ctx:
+            ctx.userdata.ctx.shutdown()
 
     @function_tool
-    async def transfer_to_human(self):
+    async def transfer_to_human(self):       
         await self.session.say("Transferring you to a human representative. Please hold.")
-        logger.info("✅ Transferring...")
+       
 
 # --- Entrypoint ---
 async def entrypoint(ctx: JobContext):
-    await ctx.connect()
-
+    raw_metadata = ctx.room.metadata
+    if not isinstance(raw_metadata, str) or not raw_metadata.strip():
+        raw_metadata = os.getenv("ROOM_METADATA", "{}")
+   
     try:
-        metadata = json.loads(os.getenv("ROOM_METADATA", "{}"))
+        if isinstance(raw_metadata, str):
+            metadata = json.loads(raw_metadata)
+        else:
+            metadata = json.loads(str(raw_metadata))
+        kb_id = metadata.get("kb_id", "Not provided")
     except Exception as e:
-        raise RuntimeError(f"❌ Invalid ROOM_METADATA JSON in env: {e}")
+        print(f"⚠️ Failed to parse metadata: {e}")
+        kb_id = None
 
-    kb_id = metadata.get("kb_id")
-    if not kb_id:
-        raise RuntimeError("❌ kb_id is required in ROOM_METADATA environment variable.")
-    persona = metadata.get("AGENT_PERSONA", "You are a helpful AI assistant.")
+    if not kb_id or kb_id == "Not provided":
+        print("❌ kb_id not provided in room metadata.")
+        return
+
+    persona = metadata.get("AGENT_PERSONA")
 
     userdata = UserData(kb_id=kb_id, persona=persona, ctx=ctx)
 
     session = AgentSession(
         userdata=userdata,
-        llm=openai.LLM(model=metadata.get("model_llm", "gpt-4o-mini")),
+        llm=openai.LLM(model=metadata.get("model_llm")),
         tts=openai.TTS(
-            model=metadata.get("model_tts", "gpt-4o-mini-tts"),
-            voice=metadata.get("voice_tts", "nova")
+            model=metadata.get("model_tts"),
+            voice=metadata.get("voice_tts")
         ),
         stt=deepgram.STT(
-            model=metadata.get("model_stt", "nova-3"),
-            language=metadata.get("lang_stt", "multi")
+            model=metadata.get("model_stt"),
+            # language=metadata.get("lang_stt", "multi"),
+            language="en",
+            punctuate=True,  # auto add , . 
+            keyterms=["Retell", "Walmart", "PBX", "Angel"],  # more focused on these words and auto correct
         ),
         vad=silero.VAD.load(),
        
-    )
+    )   
 
-    # Optional: Handle events like transcription
+    agent = KBAgent()
+
     @session.on("user_input_transcribed")
     def on_transcribed(event: UserInputTranscribedEvent):
-        print(f"[📝 Transcript] {event.transcript} (final={event.is_final})")
+        if event.is_final:
+            agent.transcript_log.append(f"User: {event.transcript}")
+            print(f"[📝 Transcript] {event.transcript}")
+
+    async def analyze_chat(session_history: dict) -> dict:
+        """
+        Analyze the chat transcript using OpenAI to generate:
+        - Summary
+        - Sentiment
+        - Chat success
+        """
+        messages = session_history.get("items", [])
+
+        # Build formatted chat string
+        full_chat = "\n".join(
+            f"{item['role'].capitalize()}: {' '.join(item['content'])}"
+            for item in messages
+            if item.get("type") == "message" and item.get("content")
+        )
+
+        prompt = (
+            "You are a call center assistant analytics AI.\n"
+            "Analyze the following conversation and return *only* a JSON object with these keys:\n"
+            "  - chat_summary (1-2 sentence summary of the conversation)\n"
+            "  - user_sentiment (Positive, Neutral, or Negative based on user's tone)\n"
+            "  - chat_successful (true if user query was addressed, false otherwise)\n\n"
+            f"Transcript:\n{full_chat}"
+        )
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": prompt}],
+                temperature=0.7,
+                
+            )
+        
+            content = response.choices[0].message.content.strip()
+           
+            match = re.search(r'```(?:json)?\s*(\{.*\})\s*```', content, re.DOTALL)
+            if match:
+                json_text = match.group(1)
+            else:
+               
+                json_text = content
+
+            try:
+                result = json.loads(json_text)
+            except json.JSONDecodeError as je:
+                logging.error("Failed to parse JSON from analysis response: %s", je)
+                raise
+
+            return {
+                "chat_summary":     result.get("chat_summary",     "Summary not available."),
+                "user_sentiment":   result.get("user_sentiment",   "Neutral"),
+                "chat_successful":  bool(result.get("chat_successful", False)),
+            }
+
+        except Exception as e:
+            logging.exception("❌ Chat analysis failed")
+            return {
+                "chat_summary":   "Analysis failed.",
+                "user_sentiment": "Unknown",
+                "chat_successful": False
+            }
+
+   
+    # ✅ Save transcript to file at shutdown
+    async def write_transcript():
+        try:
+            session_dict = session.history.to_dict()
+            chat_analysis = await analyze_chat(session_dict)
+            payload = {
+            "agent_id": "57e1ba83f1924ab6",
+            "agent_version": 0,
+            "chat_status": "ended",
+            "retell_llm_dynamic_variables": {
+                "customer_name": "John Doe"
+            },
+            "metadata": {},
+            "start_timestamp": session.userdata.start_timestamp,
+            "end_timestamp": int(time.time() * 1000),
+            "transcript": "\n".join(
+        f"{item['role'].capitalize()}: {' '.join(item['content'])}"
+        for item in session.history.to_dict().get("items", [])
+    ),
+            "chat_cost": {
+                "product_costs": [
+                    {
+                        "product": metadata.get("model_llm", "gpt-4o-mini"),
+                        "unitPrice": 1,
+                        "cost": 50
+                    }
+                ],
+                "combined_cost": 50
+            },
+            "chat_analysis": chat_analysis
+        }
+
+       
+            async with httpx.AsyncClient(timeout=5.0) as client:
+               
+                AUTH_TOKEN=os.getenv('AUTH_TOKEN')
+                response = await client.post(
+                    url=os.getenv("CHAT_API_URL", "http://localhost:8000/create-chat"),
+                    json=payload,
+                    headers={"Authorization": f"Bearer {AUTH_TOKEN}"}
+                )
+                response.raise_for_status()
+         
+        except Exception as e:
+            print(f"❌ Failed to write transcript: {e}")
+
+    ctx.add_shutdown_callback(write_transcript)
+   
 
     # Optional: Background audio
     background_audio = BackgroundAudioPlayer(
@@ -237,10 +364,11 @@ async def entrypoint(ctx: JobContext):
         ],
     )
 
-    await session.start(agent=KBAgent(),room=ctx.room,
+    await session.start(agent=agent,room=ctx.room,
                          room_input_options=RoomInputOptions(
             noise_cancellation=noise_cancellation.BVC()
         ))
+    await ctx.connect()
     await background_audio.start(agent_session=session, room=ctx.room)
 
 # --- CLI ---

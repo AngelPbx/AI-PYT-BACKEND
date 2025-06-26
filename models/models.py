@@ -114,8 +114,8 @@ class APIKey(Base):
     user = relationship("User", back_populates="edited_keys")
 
 # Agent Models
-class Agent(Base):
-    __tablename__ = "agents"
+class pbx_ai_agent(Base):
+    __tablename__ = "pbx_ai_agent"
 
     id = Column(String, primary_key=True, index=True, default=lambda: f"{uuid.uuid4().hex[:16]}")
     version = Column(Integer, default=0)
@@ -201,3 +201,32 @@ class ChatSession(Base):
     chat_metadata = Column("metadata", JSONB, nullable=True)  # renamed to avoid SQLAlchemy conflict
     chat_cost = Column(JSONB, nullable=True)
     chat_analysis = Column(JSONB, nullable=True)
+
+# voice
+class LLMVoice(Base):
+    __tablename__ = "voices"
+
+    voice_id = Column(String, primary_key=True, index=True)
+    voice_name = Column(String, nullable=False)
+    provider = Column(String, nullable=False)
+    gender = Column(String, nullable=False)
+    accent = Column(String, nullable=True)
+    age = Column(String, nullable=True)
+    preview_audio_url = Column(String, nullable=True)
+
+#import phone
+class ImportedPhoneNumber(Base):
+    __tablename__ = "imported_phone_numbers"
+
+    id = Column(Integer, primary_key=True, index=True)
+    phone_number = Column(String, unique=True, nullable=False, index=True)
+    phone_number_type = Column(String, default="retell-twilio")
+    phone_number_pretty = Column(String)
+    inbound_agent_id = Column(String, nullable=True)
+    outbound_agent_id = Column(String, nullable=True)
+    inbound_agent_version = Column(Integer, nullable=True)
+    outbound_agent_version = Column(Integer, nullable=True)
+    area_code = Column(Integer)
+    nickname = Column(String, nullable=True)
+    inbound_webhook_url = Column(String, nullable=True)
+    last_modification_timestamp = Column(BigInteger)
