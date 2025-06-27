@@ -52,6 +52,10 @@ async def create_room():
             if resp.status == 200:
                 data = await resp.json()
                 pretty_print("Room created successfully", data)
+<<<<<<< HEAD
+=======
+                print("✅ Room created successfully:", data)
+>>>>>>> arbaz
             else:
                 print(f"\n Error creating room ({resp.status}):\n{await resp.text()}")
 
@@ -68,12 +72,19 @@ async def list_rooms():
         async with session.post(url, headers=headers, json={}) as resp:
             if resp.status == 200:
                 data = await resp.json()
-                pretty_print("Current rooms", data)
+                print("📋 Current rooms:", data)
             else:
-                print(f"\n Error listing rooms ({resp.status}):\n{await resp.text()}")
+                print(f"❌ Error listing rooms ({resp.status}): {await resp.text()}")
 
 if __name__ == "__main__":
+<<<<<<< HEAD
     asyncio.run(list_rooms())
     # asyncio.run(create_room())
     
     #in this code the room is created and listed using the LiveKit API. what i want to do is whenever a participant joins the room, auto
+=======
+    asyncio.run(create_room())
+    # asyncio.run(list_rooms())
+    # asyncio.run(list_participants("ankit","admin"))  # Specify the room name and identity
+      # You can toggle this
+>>>>>>> arbaz
