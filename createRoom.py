@@ -5,8 +5,8 @@ import json
 from aiohttp import ClientSession
 import os
 # LiveKit credentials
-LIVEKIT_URL = os.getenv('LIVEKIT_URL') # Ensure this env var is set
-LIVEKIT_API_KEY = os.getenv('LIVEKIT_API_KEY') # Ensure this env var is set
+LIVEKIT_URL = os.getenv('LIVEKIT_URL') 
+LIVEKIT_API_KEY = os.getenv('LIVEKIT_API_KEY') 
 LIVEKIT_API_SECRET = os.getenv('LIVEKIT_API_SECRET')
 
 def generate_admin_token():
