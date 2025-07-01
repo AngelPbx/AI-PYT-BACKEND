@@ -1,5 +1,5 @@
 import os, shutil, fitz
-from docx import Document  #pip install pymupdf python-docx
+from docx import Document
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -19,7 +19,7 @@ from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember,
                            ChatSession, LLMVoice, ImportedPhoneNumber
                            )
 from models.schemas import (
-    UserSignup, UserLogin, UpdateUser,
+    UserSignup, UserLogin, UpdateUser,TokenRequest,
     WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, KnowledgeBaseCreate, 
     AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, CreateChatRequest, CreateChatResponse,
     VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut
@@ -69,6 +69,39 @@ def check_username_availability(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
+
+
+# Request model
+from livekit.api import AccessToken, RoomAgentDispatch, RoomConfiguration, VideoGrants
+from livekit import api
+LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
+LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
+AGENT_NAME = os.getenv("ROOM")
+
+@router.post("/get-token")
+def get_token(payload: TokenRequest):
+    if not LIVEKIT_API_KEY or not LIVEKIT_API_SECRET:
+        raise HTTPException(status_code=500, detail="LiveKit API credentials not configured")
+    
+    token = api.AccessToken(os.getenv('LIVEKIT_API_KEY'), os.getenv('LIVEKIT_API_SECRET')) \
+    .with_identity(payload.user_id) \
+    .with_name(payload.user_id) \
+    .with_grants(api.VideoGrants(
+        room_join=True,
+        room=payload.room_name,
+    )) \
+    .with_room_config(
+            RoomConfiguration(
+                agents=[
+                    RoomAgentDispatch(
+                        agent_name=AGENT_NAME,
+                        metadata=f'{{"user_id": "{payload.user_id}"}}'
+                    )
+                ]
+            )
+    )
+   
+    return {"token": token.to_jwt()}
 
 @router.post("/signup")
 def signup(user: UserSignup, db: Session = Depends(get_db)):
@@ -586,9 +619,8 @@ def delete_workspace(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
-
 @router.post("/workspaces/{workspace_id}/knowledge-bases")
-def create_knowledge_base(
+async def create_knowledge_base(
     workspace_id: int,
     source_type: str = Form(...),  # 'file', 'web_page', or 'text'
     name: str = Form(...),
@@ -600,101 +632,20 @@ def create_knowledge_base(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        workspace = db.query(Workspace).filter(
-            Workspace.id == workspace_id,
-            Workspace.owner_id == current_user.id
-        ).first()
-
+        # Validate workspace
+        workspace = db.query(Workspace).filter_by(id=workspace_id, owner_id=current_user.id).first()
         if not workspace:
-            return format_response(
-                status=False,
-                message="Workspace not found",
-                errors=[{"field": "workspace_id", "message": "Workspace not found"}],
-                status_code=404
-            )
-            
+            return format_response(False, "Workspace not found", errors=[{"field": "workspace_id"}], status_code=404)
+
         if not name.strip():
-            return format_response(
-                status=False,
-                message="Validation error",
-                errors=[{"field": "name", "message": "Knowledge base name is required"}],
-                status_code=400
-            )
+            return format_response(False, "Knowledge base name is required", errors=[{"field": "name"}], status_code=400)
 
-        kb_id_str = f"knowledge_base_{uuid.uuid4().hex[:16]}"
-        kb_folder = UPLOAD_DIR / f"workspace_{workspace_id}" / kb_id_str
-        kb_folder.mkdir(parents=True, exist_ok=True)
-
+        # Create KnowledgeBase
+        kb_id = uuid.uuid4().hex[:16]
         now_utc = datetime.utcnow()
-        file_path = None
-        file_name = None
-        source_details = {}
-
-        if source_type == "file":
-            if not file:
-                return format_response(
-                    status=False,
-                    message="File upload required",
-                    errors=[{"field": "file", "message": "No file uploaded"}]
-                )
-            file_name = f"{uuid.uuid4().hex}_{file.filename}"
-            file_path = kb_folder / file_name
-            with open(file_path, "wb") as buffer:
-                buffer.write(file.file.read())
-            source_details = {
-                "type": "document",
-                "source_id": str(workspace_id),
-                "filename": file_name,
-                "file_url": str(file_path)
-            }
-
-        elif source_type == "web_page":
-            if not url:
-                return format_response(
-                    status=False,
-                    message="URL required",
-                    errors=[{"field": "url", "message": "No URL provided"}]
-                )
-            file_name = f"web_{uuid.uuid4().hex}.txt"
-            file_path = kb_folder / file_name
-           
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(f"Crawled content from {url}")  # to complet crawler logic
-            source_details = {
-                "type": "web_page",
-                "source_id": str(workspace_id),
-                "filename": file_name,
-                "file_url": str(file_path)
-            }
-
-        elif source_type == "text":
-            if not text_filename or not text_content:
-                return format_response(
-                    status=False,
-                    message="Text filename and content required",
-                    errors=[{"field": "text", "message": "Missing text filename or content"}]
-                )
-            file_name = f"{uuid.uuid4().hex}_{text_filename}.txt"
-            file_path = kb_folder / file_name
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(text_content)
-            source_details = {
-                "type": "text",
-                "source_id": str(workspace_id),
-                "filename": file_name,
-                "file_url": str(file_path)
-            }
-
-        else:
-            return format_response(
-                status=False,
-                message="Invalid source type",
-                errors=[{"field": "source_type", "message": "Must be one of: file, web_page, text"}]
-            )
-
         kb = KnowledgeBase(
+            id=kb_id,
             name=name,
-            file_path=str(file_path),
             workspace_id=workspace_id,
             enable_auto_refresh=True,
             auto_refresh_interval=24,
@@ -704,28 +655,240 @@ def create_knowledge_base(
         db.commit()
         db.refresh(kb)
 
-        response_data = {
-            "knowledge_base_id": kb_id_str,
-            "knowledge_base_name": kb.name,
-            "status": "in_progress",
-            "knowledge_base_sources": [source_details],
-            "enable_auto_refresh": kb.enable_auto_refresh,
-            "last_refreshed_timestamp": int(now_utc.timestamp() * 1000)
-        }
+        # Set up directory
+        kb_path = UPLOAD_DIR / f"workspace_{workspace_id}" / f"knowledge_base_{kb_id}"
+        kb_path.mkdir(parents=True, exist_ok=True)
+
+        # Handle source
+        file_path, file_name, extract_text = None, None, ""
+
+        if source_type == "file":
+            if not file:
+                return format_response(False, "File is required", errors=[{"field": "file"}], status_code=400)
+
+            ext = Path(file.filename).suffix.lower()
+            file_name = f"{uuid.uuid4().hex}_{file.filename}"
+            file_path = kb_path / file_name
+
+            with open(file_path, "wb") as f_out:
+                f_out.write(await file.read())
+
+            if ext == ".pdf":
+                with fitz.open(file_path) as doc:
+                    extract_text = "\n".join(p.get_text() for p in doc)
+            elif ext == ".docx":
+                extract_text = "\n".join(p.text for p in Document(file_path).paragraphs)
+            elif ext == ".txt":
+                extract_text = file_path.read_text(encoding="utf-8")
+            else:
+                return format_response(False, "Unsupported file type", status_code=400)
+
+        elif source_type == "web_page":
+            if not url or not text_filename:
+                return format_response(False, "URL and filename required", status_code=400)
+            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+            res.raise_for_status()
+            soup = BeautifulSoup(res.text, "html.parser")
+            for tag in soup(["script", "style"]): tag.decompose()
+            extract_text = soup.get_text(separator="\n", strip=True)
+            file_name = text_filename
+            file_path = url
+
+        elif source_type == "text":
+            if not text_filename or not text_content:
+                return format_response(False, "Text filename and content required", status_code=400)
+            file_name = f"{uuid.uuid4().hex}_{text_filename}.txt"
+            file_path = kb_path / file_name
+            file_path.write_text(text_content, encoding="utf-8")
+            extract_text = text_content
+
+        else:
+            return format_response(False, "Invalid source type", status_code=400)
+
+        # Generate Embedding
+        clean_text = extract_text.replace("\n", " ").strip()
+        truncated = clean_text[:3000]
+
+        embedding_response = openai_client.embeddings.create(
+            model="text-embedding-3-small",
+            input=truncated
+        )
+        embedding_vector = embedding_response.data[0].embedding
+
+        # Store in KnowledgeFile
+        kb_file = KnowledgeFile(
+            kb_id=kb.id,
+            filename=file_name,
+            file_path=str(file_path),
+            extract_data=extract_text,
+            embedding=embedding_vector,
+            status=FileStatus.completed,
+            source_type=SourceStatus(source_type)
+        )
+        db.add(kb_file)
+        db.commit()
 
         return format_response(
             status=True,
             message="Knowledge base created successfully",
-            data=response_data
+            data={
+                "knowledge_base_id": kb.id,
+                "knowledge_base_name": kb.name,
+                "status": "in_progress",
+                "knowledge_base_sources": [{
+                    "source_id": kb_file.id,
+                    "type": source_type,
+                    "filename": file_name,
+                    "file_url": str(file_path)
+                }],
+                "enable_auto_refresh": kb.enable_auto_refresh,
+                "last_refreshed_timestamp": int(now_utc.timestamp() * 1000)
+            }
         )
 
     except Exception as e:
         db.rollback()
-        return format_response(
-            status=False,
-            message="Internal Server Error",
-            errors=[{"field": "server", "message": str(e)}]
-        )
+        return format_response(False, "Internal Server Error", errors=[{"field": "server", "message": str(e)}], status_code=500)
+
+# @router.post("/workspaces/{workspace_id}/knowledge-bases")
+# def create_knowledge_base(
+#     workspace_id: int,
+#     source_type: str = Form(...),  # 'file', 'web_page', or 'text'
+#     name: str = Form(...),
+#     file: UploadFile = File(None),
+#     url: str = Form(None),
+#     text_filename: str = Form(None),
+#     text_content: str = Form(None),
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     try:
+#         workspace = db.query(Workspace).filter(
+#             Workspace.id == workspace_id,
+#             Workspace.owner_id == current_user.id
+#         ).first()
+
+#         if not workspace:
+#             return format_response(
+#                 status=False,
+#                 message="Workspace not found",
+#                 errors=[{"field": "workspace_id", "message": "Workspace not found"}],
+#                 status_code=404
+#             )
+            
+#         if not name.strip():
+#             return format_response(
+#                 status=False,
+#                 message="Validation error",
+#                 errors=[{"field": "name", "message": "Knowledge base name is required"}],
+#                 status_code=400
+#             )
+
+#         kb_id_str = f"knowledge_base_{uuid.uuid4().hex[:16]}"
+#         kb_folder = UPLOAD_DIR / f"workspace_{workspace_id}" / kb_id_str
+#         kb_folder.mkdir(parents=True, exist_ok=True)
+
+#         now_utc = datetime.utcnow()
+#         file_path = None
+#         file_name = None
+#         source_details = {}
+
+#         if source_type == "file":
+#             if not file:
+#                 return format_response(
+#                     status=False,
+#                     message="File upload required",
+#                     errors=[{"field": "file", "message": "No file uploaded"}]
+#                 )
+#             file_name = f"{uuid.uuid4().hex}_{file.filename}"
+#             file_path = kb_folder / file_name
+#             with open(file_path, "wb") as buffer:
+#                 buffer.write(file.file.read())
+#             source_details = {
+#                 "type": "document",
+#                 "source_id": str(workspace_id),
+#                 "filename": file_name,
+#                 "file_url": str(file_path)
+#             }
+
+#         elif source_type == "web_page":
+#             if not url:
+#                 return format_response(
+#                     status=False,
+#                     message="URL required",
+#                     errors=[{"field": "url", "message": "No URL provided"}]
+#                 )
+#             file_name = f"web_{uuid.uuid4().hex}.txt"
+#             file_path = kb_folder / file_name
+           
+#             with open(file_path, "w", encoding="utf-8") as f:
+#                 f.write(f"Crawled content from {url}")  # to complet crawler logic
+#             source_details = {
+#                 "type": "web_page",
+#                 "source_id": str(workspace_id),
+#                 "filename": file_name,
+#                 "file_url": str(file_path)
+#             }
+
+#         elif source_type == "text":
+#             if not text_filename or not text_content:
+#                 return format_response(
+#                     status=False,
+#                     message="Text filename and content required",
+#                     errors=[{"field": "text", "message": "Missing text filename or content"}]
+#                 )
+#             file_name = f"{uuid.uuid4().hex}_{text_filename}.txt"
+#             file_path = kb_folder / file_name
+#             with open(file_path, "w", encoding="utf-8") as f:
+#                 f.write(text_content)
+#             source_details = {
+#                 "type": "text",
+#                 "source_id": str(workspace_id),
+#                 "filename": file_name,
+#                 "file_url": str(file_path)
+#             }
+
+#         else:
+#             return format_response(
+#                 status=False,
+#                 message="Invalid source type",
+#                 errors=[{"field": "source_type", "message": "Must be one of: file, web_page, text"}]
+#             )
+
+#         kb = KnowledgeBase(
+#             name=name,
+#             file_path=str(file_path),
+#             workspace_id=workspace_id,
+#             enable_auto_refresh=True,
+#             auto_refresh_interval=24,
+#             last_refreshed=now_utc
+#         )
+#         db.add(kb)
+#         db.commit()
+#         db.refresh(kb)
+
+#         response_data = {
+#             "knowledge_base_id": kb_id_str,
+#             "knowledge_base_name": kb.name,
+#             "status": "in_progress",
+#             "knowledge_base_sources": [source_details],
+#             "enable_auto_refresh": kb.enable_auto_refresh,
+#             "last_refreshed_timestamp": int(now_utc.timestamp() * 1000)
+#         }
+
+#         return format_response(
+#             status=True,
+#             message="Knowledge base created successfully",
+#             data=response_data
+#         )
+
+#     except Exception as e:
+#         db.rollback()
+#         return format_response(
+#             status=False,
+#             message="Internal Server Error",
+#             errors=[{"field": "server", "message": str(e)}]
+#         )
 
 @router.get("/workspaces/{workspace_id}/knowledge-bases")
 def list_kbs(
@@ -893,7 +1056,6 @@ def get_knowledge_base(
             status_code=500
         )
        
-from openai import OpenAI
 
 # Ensure you initialize OpenAI client
 openai_client = OpenAI()

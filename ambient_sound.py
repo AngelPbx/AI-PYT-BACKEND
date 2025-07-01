@@ -82,6 +82,15 @@ class KBAgent(Agent):
         super().__init__(instructions="Answer only based on the provided KB data. Be concise and helpful.")
         self.volume: int = 50
         self.transcript_log: list[str] = []
+        
+    @function_tool
+    async def detected_answering_machine(self):
+        """Call this tool if you have detected a voicemail system, AFTER hearing the voicemail greeting"""
+        await self.session.generate_reply(
+            instructions="Leave a voicemail message letting the user know you'll call back later."
+        )
+        # await asyncio.sleep(0.5) # Add a natural gap to the end of the voicemail message
+        # await hangup_call()
 
     async def on_enter(self):
         userdata: UserData = self.session.userdata

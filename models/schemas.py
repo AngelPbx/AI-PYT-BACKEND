@@ -41,6 +41,10 @@ class KnowledgeBaseCreate(BaseModel):
     name: str
     workspace_id: int
 
+class TokenRequest(BaseModel):
+    room_name: str
+    user_id: str
+
 class KnowledgeBaseOut(BaseModel):
     id: str
     name: str
