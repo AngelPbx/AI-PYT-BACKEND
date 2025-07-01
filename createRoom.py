@@ -68,9 +68,9 @@ async def list_rooms():
         async with session.post(url, headers=headers, json={}) as resp:
             if resp.status == 200:
                 data = await resp.json()
-                pretty_print("Current rooms", data)
+                print("📋 Current rooms:", data)
             else:
-                print(f"\n Error listing rooms ({resp.status}):\n{await resp.text()}")
+                print(f"❌ Error listing rooms ({resp.status}): {await resp.text()}")
 
 if __name__ == "__main__":
     asyncio.run(list_rooms())

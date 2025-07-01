@@ -3,6 +3,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from pathlib import Path
+import os
+
 from utils.helpers import format_response
 from routes import router
 from db.database import engine, Base
@@ -11,28 +14,16 @@ import os
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 
+# Initialize FastAPI app
 app = FastAPI()
 app.include_router(router)
-
-def add_cors_middleware(app):
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"], 
-        allow_credentials=True, 
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
 # Base.metadata.drop_all(bind=engine, checkfirst=True)  
 Base.metadata.create_all(bind=engine)
 
-load_dotenv()
+app.mount("/files", StaticFiles(directory="uploads"), name="files")
 
-STATIC_DIR = Path(os.getenv("STATIC_DIR", "static")).resolve()
-STATIC_DIR.mkdir(parents=True, exist_ok=True)
-
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
+# Exception Handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = []
