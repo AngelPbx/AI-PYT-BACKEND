@@ -1,0 +1,7 @@
+{
+  "rule": {
+    "room_prefix": "call-",
+    "agent_name": "inbound-agent",
+    "metadata": "job dispatch metadata"
+  }
+}

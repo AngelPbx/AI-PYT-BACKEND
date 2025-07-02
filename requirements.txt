@@ -10,7 +10,7 @@ livekit_protocol
 numpy
 openai
 passlib
-psycopg2
+psycopg
 pydantic[email]
 pydantic
 PyJWT
