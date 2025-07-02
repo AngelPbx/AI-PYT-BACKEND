@@ -1,0 +1,18 @@
+{
+  "rule": {
+    "dispatch_rule_individual": {
+      "room_prefix": "sales-"
+    },
+    "configured_trunk_ids": [
+      "ST_BK2cqjcwegBJ"
+    ]
+  },
+  "room_config": {
+    "agents": [
+      {
+        "agent_name": "sales-agent",
+        "metadata": "sales team"
+      }
+    ]
+  }
+}

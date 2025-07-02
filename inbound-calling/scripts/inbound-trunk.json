@@ -1,7 +1,7 @@
 {
   "trunk": {
-    "name": "My inbound trunk",
-    "number": ["+18775588592"],
+    "name": "My inbound trunk - 4",
+    "numbers": ["+1877565488194"],
     "username": "inbound",
     "password": "root"
   }
