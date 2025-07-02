@@ -8,3 +8,6 @@ venv/
 # Testing directories
 testing-agent/
 LK-inbound-calling/
+
+
+__pycache__/
