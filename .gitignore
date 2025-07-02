@@ -1,8 +1,10 @@
+# Virtual environment
 venv/
-*.env/
+
+# Environment files
 .env
-__pycache__/
+*.env
 
- *uploads/*
-
-uploads/
+# Testing directories
+testing-agent/
+LK-inbound-calling/
