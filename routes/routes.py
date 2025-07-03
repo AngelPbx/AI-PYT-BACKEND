@@ -33,7 +33,11 @@ from utils.security import (
     create_token
 )
 
-from db.database import engine, Base
+from db.database import engine
+
+from authlib.integrations.starlette_client import OAuth
+from starlette.requests import Request
+from starlette.config import Config
 
 router = APIRouter()
 
@@ -45,7 +49,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 # Initialize OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-@router.get("/check-username")
+@router.get("/check-username") # ========>>>> METHOD NOT ALLOWED ERROR to be FIXED  
 def check_username_availability(
     username: str = Query(..., min_length=5, max_length=50),
     db: Session = Depends(get_db)
@@ -70,7 +74,7 @@ def check_username_availability(
             errors=[{"field": "server", "message": str(e)}]
         )
 
-@router.post("/signup")
+@router.post("/signup") # ======>>>>>>> issue with check usernam while entreing
 def signup(user: UserSignup, db: Session = Depends(get_db)):
     try:
         # Validate inputs
@@ -893,6 +897,21 @@ def get_knowledge_base(
         )
        
 from openai import OpenAI
+from fastapi.responses import RedirectResponse
+
+config = Config(".env")
+
+oauth = OAuth()
+oauth.register(
+    name='github',
+    client_id=os.getenv("GITHUB_CLIENT_ID"),
+    client_secret=os.getenv("GITHUB_CLIENT_SECRET"),
+    authorize_url='https://github.com/login/oauth/authorize',
+    access_token_url='https://github.com/login/oauth/access_token',
+    api_base_url='https://api.github.com/',
+    client_kwargs={'scope': 'user:email'} 
+)
+
 
 # Ensure you initialize OpenAI client
 openai_client = OpenAI()
@@ -1683,3 +1702,94 @@ def list_phone_numbers(
     current_user: User = Depends(get_current_user)  # optional
 ):
     return db.query(ImportedPhoneNumber).all()
+
+@router.get("/auth/github/login")
+async def github_login(request: Request):
+    redirect_uri = request.url_for("github_callback")
+    return await oauth.github.authorize_redirect(request, redirect_uri)
+
+@router.get("/auth/github/callback")
+async def github_callback(request: Request, db: Session = Depends(get_db)):
+    try:
+        token = await oauth.github.authorize_access_token(request)
+        github_user = await oauth.github.get('user', token=token)
+        github_user = github_user.json()
+
+        username = github_user["login"]
+        email = github_user.get("email")
+
+        if not email:
+            # GitHub may hide public email, so fetch from email endpoint
+            emails = await oauth.github.get('user/emails', token=token)
+            email_list = emails.json()
+            email = next((item["email"] for item in email_list if item["primary"] and item["verified"]), None)
+
+        if not email:
+            raise HTTPException(status_code=400, detail="Email not available from GitHub")
+
+        user = db.query(User).filter(User.email == email).first()
+
+        if not user:
+            # Create new user
+            user = User(
+                username=username,
+                email=email,
+                full_name=github_user.get("name") or username,
+                retall_api_key=os.getenv("RETAIL_API_KEY"),
+                hashed_password="",
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            # Create workspace and membership
+            workspace = Workspace(
+                name=f"{username}_workspace",
+                description="Default workspace",
+                owner_id=user.id,
+                created_at=datetime.utcnow()
+            )
+            db.add(workspace)
+            db.commit()
+            db.refresh(workspace)
+
+            settings = WorkspaceSettings(
+                workspace_id=workspace.id,
+                default_model="gpt-4",
+                default_voice="echo",
+                temperature=1
+            )
+            member = WorkspaceMember(
+                user_id=user.id,
+                workspace_id=workspace.id,
+                role="owner"
+            )
+            db.add_all([settings, member])
+            db.commit()
+
+        # Issue JWT token
+        token, expire = create_token({
+            "username": user.username,
+            "expire_minutes": os.getenv("TOKEN_EXPIRE_MINUTES", 60)
+        })
+
+        return format_response(
+            status=True,
+            message="GitHub login successful",
+            data={
+                "token": "Bearer " + token,
+                "expires_at": expire.isoformat() + "Z",
+                "expire_duration_minutes": int(os.getenv("TOKEN_EXPIRE_MINUTES", 60)),
+                "retall_api_key": user.retall_api_key
+            }
+        )
+
+    except Exception as e:
+        db.rollback()
+        return format_response(
+            status=False,
+            message="GitHub login failed",
+            errors=[{"field": "server", "message": str(e)}]
+        )

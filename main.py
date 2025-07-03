@@ -3,16 +3,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from pathlib import Path
-import os
 
 from utils.helpers import format_response
 from routes import router
 from db.database import engine, Base
-from pathlib import Path
 import os
-from dotenv import load_dotenv
-from fastapi.middleware.cors import CORSMiddleware
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -22,6 +17,10 @@ app.include_router(router)
 Base.metadata.create_all(bind=engine)
 
 app.mount("/files", StaticFiles(directory="uploads"), name="files")
+
+from starlette.middleware.sessions import SessionMiddleware
+
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY", "supersecretlongrandomstring"))
 
 # Exception Handlers
 @app.exception_handler(RequestValidationError)
