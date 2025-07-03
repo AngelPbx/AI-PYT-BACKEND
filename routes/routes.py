@@ -705,7 +705,7 @@ async def create_knowledge_base(
             status=True,
             message="Knowledge base updated successfully" if kb_id else "Knowledge base created successfully",
             data={
-                "knowledge_base_id": kb.id,
+                "knowledge_base_id": f"knowledge_base_{kb.id}",
                 "knowledge_base_name": kb.name,
                 "status": kb_file.status.value,
                 "knowledge_base_sources": [{
