@@ -336,4 +336,4 @@ class PhoneNumberOut(BaseModel):
     last_modification_timestamp: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
