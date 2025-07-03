@@ -22,7 +22,7 @@ def create_token(data: dict, expire_minutes: int = 1440):
     expire = datetime.utcnow() + timedelta(minutes=expire_minutes)
     to_encode.update({"exp": expire})
     token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return token, expire
+    return token
 
 
 def decode_token(token: str):

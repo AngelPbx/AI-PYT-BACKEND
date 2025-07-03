@@ -58,7 +58,7 @@ def retrieve_kb_context(query: str, kb_id: str, top_k: int = 3) -> str:
                 continue
             emb = file.embedding
             if isinstance(emb, str):
-                emb = np.array(eval(emb))
+                emb = np.array(eval(emb))                
             score = cosine_similarity(query_embedding, emb)
             results.append((score, file.extract_data.strip()))
     finally:
@@ -185,6 +185,7 @@ class KBAgent(Agent):
 
 # --- Entrypoint ---
 async def entrypoint(ctx: JobContext):
+    
     raw_metadata = ctx.room.metadata
     if not isinstance(raw_metadata, str) or not raw_metadata.strip():
         raw_metadata = os.getenv("ROOM_METADATA", "{}")
@@ -345,20 +346,26 @@ async def entrypoint(ctx: JobContext):
    
 
     # Optional: Background audio
-    background_audio = BackgroundAudioPlayer(
-        ambient_sound=AudioConfig(BuiltinAudioClip.OFFICE_AMBIENCE, volume=0.8),
-        thinking_sound=[
-            AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.8),
-            AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.7),
-        ],
-    )
+    # background_audio = BackgroundAudioPlayer(
+    #     ambient_sound=AudioConfig(BuiltinAudioClip.OFFICE_AMBIENCE, volume=0.8),
+    #     thinking_sound=[
+    #         AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.8),
+    #         AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.7),
+    #     ],
+    # )
+    # participant = await ctx.wait_for_participant()
+    # if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
+    #     call_id = participant.attributes.get("sip.callID")
+    #     phone = participant.attributes.get("sip.phoneNumber", "unknown")
+    #     print(f"📞 SIP call from {phone}, Call ID: {call_id}")
 
     await session.start(agent=agent,room=ctx.room,
                          room_input_options=RoomInputOptions(
             noise_cancellation=noise_cancellation.BVC()
         ))
+    
+    # await background_audio.start(agent_session=session, room=ctx.room)
     await ctx.connect()
-    await background_audio.start(agent_session=session, room=ctx.room)
 
 # --- CLI ---
 if __name__ == "__main__":
