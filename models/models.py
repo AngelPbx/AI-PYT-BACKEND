@@ -71,6 +71,7 @@ class KnowledgeBase(Base):
     enable_auto_refresh = Column(Boolean, default=False, nullable=False)
     auto_refresh_interval = Column(Integer, default=24, nullable=False)  # hours
     last_refreshed = Column(DateTime, nullable=True)
+    knowledge_files = relationship("KnowledgeFile", back_populates="knowledge_base", cascade="all, delete-orphan")
 
     workspace = relationship("Workspace", back_populates="knowledge_bases")
 
@@ -96,6 +97,7 @@ class KnowledgeFile(Base):
     source_type = Column(SqlEnum(SourceStatus), default=SourceStatus.file, nullable=False)
     embedding = Column(ARRAY(Float), nullable=True)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
+    knowledge_base = relationship("KnowledgeBase", back_populates="knowledge_files")
 
     knowledge_base = relationship("KnowledgeBase")
 

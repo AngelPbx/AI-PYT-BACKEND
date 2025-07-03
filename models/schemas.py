@@ -37,6 +37,11 @@ class InviteMember(BaseModel):
     username: str
     role: Optional[str] = "member"
 
+class DispatchRequest(BaseModel):
+    room_name: str
+    agent_name: str
+    metadata: dict
+    
 class KnowledgeBaseCreate(BaseModel):
     name: str
     workspace_id: int
@@ -44,6 +49,7 @@ class KnowledgeBaseCreate(BaseModel):
 class TokenRequest(BaseModel):
     room_name: str
     user_id: str
+    agent_name: str
 
 class KnowledgeBaseOut(BaseModel):
     id: str
@@ -198,6 +204,29 @@ class LLMState(BaseModel):
     edges: Optional[List[StateEdge]] = []
     tools: Optional[List[Tool]] = []
 
+class KnowledgeFileOut(BaseModel):
+    id: int
+    # kb_id: str
+    # filename: str
+    # file_path: Optional[str]
+    # extract_data: Optional[str]
+    status: str
+    source_type: str
+    embedding: Optional[List[float]]
+    uploaded_at: datetime
+
+    class Config:
+        orm_mode = True
+
+class StartAgentRequest(BaseModel):
+    room: str
+    kb_id: str
+    persona: str = "You are a helpful voice assistant."
+    model_llm: str = "gpt-4o"
+    model_tts: str = "tts-1"
+    voice_tts: str = "nova"
+    model_stt: str = "general"
+
 class PBXLLMCreate(BaseModel):
     workspace_id: int
     version: Optional[int] = 0
@@ -305,8 +334,19 @@ class VoiceBase(BaseModel):
 class VoiceCreate(VoiceBase):
     pass
 
-class VoiceOut(VoiceBase):
-    pass
+class VoiceOut(BaseModel):
+    voice_id: str
+    voice_name: str
+    provider: Literal["elevenlabs", "openai", "deepgram"]
+    gender: Literal["male", "female"]
+    accent: Optional[str] = None
+    age: Optional[str] = None
+    preview_audio_url: Optional[str] = None
+
+
+class VoiceListResponse(BaseModel):
+    status: bool
+    data: List[VoiceOut]
 
 #import phone
 class PhoneNumberCreate(BaseModel):
