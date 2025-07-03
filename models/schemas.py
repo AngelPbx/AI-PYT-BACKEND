@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr, field_validator
+from pydantic import BaseModel, Field, EmailStr, field_validator, ConfigDict
 from datetime import datetime
 from typing import Optional, List, Literal, Dict, Any
 
@@ -11,7 +11,7 @@ class UserSignup(BaseModel):
     retall_api_key: Optional[str] = None
 
 class UserLogin(BaseModel):
-    username: str
+    email: str
     password: str
 
 class UpdateUser(BaseModel):
@@ -342,7 +342,7 @@ class VoiceOut(BaseModel):
     accent: Optional[str] = None
     age: Optional[str] = None
     preview_audio_url: Optional[str] = None
-
+    
 
 class VoiceListResponse(BaseModel):
     status: bool
