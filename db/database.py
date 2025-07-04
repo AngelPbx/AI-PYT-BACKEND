@@ -24,12 +24,14 @@ def get_db():
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    # Move these imports here to avoid circular imports
     from models.models import User
     from utils.security import decode_token
 
     payload = decode_token(token)
-    user = db.query(User).filter(User.username == payload.get("username")).first()
+    email = payload.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="Invalid token payload: email not found")
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
     return user
