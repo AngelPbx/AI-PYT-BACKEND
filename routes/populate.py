@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from models import LLMVoice
+from models.models import LLMVoice
 from ..database import SessionLocal
 
 def populate_db():
