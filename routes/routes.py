@@ -101,7 +101,6 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
             username=user.username,
             email=user.email,
             full_name=user.full_name,
-            retall_api_key=user.retall_api_key or os.getenv("RETAIL_API_KEY"),
             hashed_password=hash_password(user.password),
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
@@ -140,7 +139,6 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
             status=True,
             message="Signup successful",
             data={
-                "retall_api_key": new_user.retall_api_key,
                 "workspace_id": workspace.id,
                 "workspace_name": workspace.name
             }
@@ -170,7 +168,6 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
                 "token": 'Bearer ' + token,
                 "expires_at": expire.isoformat() + "Z",
                 "expire_duration_minutes": int(os.getenv("TOKEN_EXPIRE_MINUTES", 60)),
-                "retall_api_key": db_user.retall_api_key
             }
         )
 
@@ -1735,7 +1732,6 @@ async def github_callback(request: Request, db: Session = Depends(get_db)):
                 username=username,
                 email=email,
                 full_name=github_user.get("name") or username,
-                retall_api_key=os.getenv("RETAIL_API_KEY"),
                 hashed_password="",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
@@ -1782,7 +1778,6 @@ async def github_callback(request: Request, db: Session = Depends(get_db)):
                 "token": "Bearer " + token,
                 "expires_at": expire.isoformat() + "Z",
                 "expire_duration_minutes": int(os.getenv("TOKEN_EXPIRE_MINUTES", 60)),
-                "retall_api_key": user.retall_api_key
             }
         )
 
