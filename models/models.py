@@ -207,9 +207,7 @@ class ChatSession(Base):
 # voice
 class LLMVoice(Base):
     __tablename__ = "voices"
-
-    id = Column(Integer, primary_key=True, index=True)
-    voice_id = Column(String, unique=True, index=True)
+    voice_id = Column(String, primary_key=True, index=True)  # Use voice_id as primary key
     voice_name = Column(String)
     provider = Column(String)
     gender = Column(String)
