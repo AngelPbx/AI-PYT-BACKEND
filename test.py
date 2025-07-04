@@ -1,3 +1,4 @@
+#save test py for agent
 import asyncio
 import os,json
 from dotenv import load_dotenv
@@ -11,9 +12,9 @@ load_dotenv()
 import logging
 from openai import OpenAI
 import numpy as np
-
-
-
+from dataclasses import dataclass
+from typing import AsyncIterable, Optional
+from livekit.plugins import deepgram, openai, silero, noise_cancellation
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,11 @@ def _perform_search(query: str, kb_id: str = None, top_k: int = 3) -> str:
 @function_tool()
 async def search_knowledge_base(context: RunContext, query: str) -> str:
     logger.info(f"✅ Tool triggered: search_knowledge_base | query='{query}'")
-    kb_id = "9ed5850f53fb4c11"
+    userdata = context.session.userdata  # Get UserData from session
+    kb_id = userdata.kb_id  # Extract kb_id
+
+    logger.info(f"✅✅✅✅ Using kb_id: {kb_id}")
+
 
     if not kb_id:
         logger.warning("❌ No kb_id found in session metadata.")
@@ -102,30 +107,44 @@ async def search_knowledge_base(context: RunContext, query: str) -> str:
         return f"⚠️ An error occurred while searching: {e}"
 
 
+@dataclass
+class UserData:
+    kb_id: str
+    persona: str
+    ctx: Optional[agents.JobContext] = None
+
+
 
 # Define your agent with tools
 class Assistant(Agent):
-    def __init__(self) -> None:
+    def __init__(self, persona: str = None) -> None:
         super().__init__(
-             instructions="""
-    You are a helpful voice AI assistant. You MUST answer user questions by calling the tool 'search_knowledge_base'.
-    DO NOT answer from your own knowledge. If the tool does not return a result, tell the user you could not find relevant information.
-    """,
+             instructions=f"""{persona}.You MUST answer user questions by calling the tool 'search_knowledge_base'.
+    DO NOT answer from your own knowledge. If the tool does not return a result, tell the user you could not find relevant information.""",
             
             tools=[search_knowledge_base]
         )
 
 
 async def entrypoint(ctx: agents.JobContext):
+    metadata = json.loads(ctx.job.metadata)
+    kb_id = metadata.get("kb_id")
+    persona = metadata.get("persona")
+    logger.info(f"✅ Starting agent | kb_id={kb_id}, persona={persona}")
+    userdata = UserData(kb_id=kb_id, persona=persona, ctx=ctx)
+
+
     session = AgentSession(
+        userdata=userdata,
+   
         llm=openai.realtime.RealtimeModel(
             voice="coral"
         )
     )
-
+    
     await session.start(
         room=ctx.room,
-        agent=Assistant(),
+        agent=Assistant(persona=persona),
         room_input_options=RoomInputOptions(
             noise_cancellation=noise_cancellation.BVC(),
         ),
