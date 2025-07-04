@@ -1693,7 +1693,7 @@ def list_voices(current_user: User = Depends(get_current_user), db: Session = De
         {
             "voice_id": "openai-shimmer",
             "voice_name": "Shimmer",
-            "provider": "elevnlabs",
+            "provider": "elevenlabs",
             "gender": "female",
             "accent": "Neutral",
             "age": "Adult",
@@ -1702,7 +1702,7 @@ def list_voices(current_user: User = Depends(get_current_user), db: Session = De
         {
             "voice_id": "elevn-echo",
             "voice_name": "Echo",
-            "provider": "elevnlabs",
+            "provider": "elevenlabs",
             "gender": "male",
             "accent": "British",
             "age": "Middle-aged",
@@ -1711,7 +1711,7 @@ def list_voices(current_user: User = Depends(get_current_user), db: Session = De
         {
             "voice_id": "elevn-nova",
             "voice_name": "Nova",
-            "provider": "elevnlabs",
+            "provider": "elevenlabs",
             "gender": "female",
             "accent": "American",
             "age": "Young Adult",
@@ -1720,7 +1720,7 @@ def list_voices(current_user: User = Depends(get_current_user), db: Session = De
         {
             "voice_id": "elevn-pulse",
             "voice_name": "Pulse",
-            "provider": "elevnlabs",
+            "provider": "elevenlabs",
             "gender": "male",
             "accent": "Australian",
             "age": "Adult",
