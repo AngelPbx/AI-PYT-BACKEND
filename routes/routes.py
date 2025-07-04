@@ -35,7 +35,6 @@ from utils.security import (
 
 from db.database import engine
 
-from authlib.integrations.starlette_client import OAuth
 from starlette.requests import Request
 from starlette.config import Config
 
