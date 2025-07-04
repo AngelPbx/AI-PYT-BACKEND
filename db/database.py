@@ -24,6 +24,7 @@ def get_db():
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    # Move these imports here to avoid circular imports
     from models.models import User
     from utils.security import decode_token
 
