@@ -8,7 +8,6 @@ class UserSignup(BaseModel):
     email: EmailStr
     full_name: str
     password: str
-    retall_api_key: Optional[str] = None
 
 class UserLogin(BaseModel):
     username: str
