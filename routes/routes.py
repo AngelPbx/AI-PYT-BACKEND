@@ -158,19 +158,13 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         if not db_user or not verify_password(user.password, db_user.hashed_password):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        # Pass expire_minutes as a separate argument, not in the data dict
-        token, expire = create_token(
-            data={"email": db_user.email},
-            expire_minutes=int(os.getenv("TOKEN_EXPIRE_MINUTES", 60))
-        )
+        token = create_token(data={"email": db_user.email})
 
         return format_response(
             status=True,
             message="Login successful",
             data={
-                "token": 'Bearer ' + token,
-                "expires_at": expire.isoformat() + "Z",
-                "expire_duration_minutes": int(os.getenv("TOKEN_EXPIRE_MINUTES", 60)),
+                "token": 'Bearer ' + token
             }
         )
 
