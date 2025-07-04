@@ -1477,7 +1477,7 @@ def create_agent(
 #     # print(db.query(pbx_ai_agent).all())
 #     return agents
 
-@router.get("/my-agents")
+@router.get("/all-agents")
 def list_my_agents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
