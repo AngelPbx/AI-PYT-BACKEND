@@ -19,10 +19,10 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def create_token(data: dict, expire_minutes: int = 1440):
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=expire_minutes)
+    expire = datetime.utcnow() + timedelta(minutes=int(data.get("expire_minutes", 60)))
     to_encode.update({"exp": expire})
     token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return token
+    return token, expire
 
 
 def decode_token(token: str):
