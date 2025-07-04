@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from fastapi.middleware.cors import CORSMiddleware  # Import CORSMiddleware
 
 from utils.helpers import format_response
 from routes import router
@@ -12,14 +13,7 @@ import os
 app = FastAPI()
 app.include_router(router)
 
-app.add_middleware(
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Base.metadata.drop_all(bind=engine, checkfirst=True)  
+# Create database tables
 Base.metadata.create_all(bind=engine)
 
 app.mount("/files", StaticFiles(directory="uploads"), name="files")
@@ -28,13 +22,13 @@ from starlette.middleware.sessions import SessionMiddleware
 
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY", "supersecretlongrandomstring"))
 
-from fastapi.middleware.cors import CORSMiddleware
-
+# Add CORS middleware
 app.add_middleware(
+    CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"], 
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 @app.exception_handler(RequestValidationError)
