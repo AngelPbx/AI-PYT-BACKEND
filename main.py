@@ -9,16 +9,9 @@ from routes import router
 from db.database import engine, Base
 import os
 
+# Initialize FastAPI app
 app = FastAPI()
 app.include_router(router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Base.metadata.drop_all(bind=engine, checkfirst=True)  
 Base.metadata.create_all(bind=engine)
@@ -39,6 +32,7 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
+# Exception Handlers
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = []
