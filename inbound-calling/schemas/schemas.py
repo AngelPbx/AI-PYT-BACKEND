@@ -18,7 +18,7 @@ class SIPTrunkOut(SIPTrunkCreate):
     created_at: datetime
 
     class Config:
-        from_attributesmode = True
+        from_attributes = True
 
 
 # ============== Dispatch Rule ==============
@@ -36,7 +36,7 @@ class SIPDispatchRuleOut(SIPDispatchRuleCreate):
     created_at: datetime
 
     class Config:
-        from_attributesmode = True
+        from_attributes = True
 
 
 # ============== Call Session ==============
@@ -50,4 +50,4 @@ class CallSessionOut(BaseModel):
     created_at: datetime
 
     class Config:
-        from_attributesmode = True
+        from_attributes = True
