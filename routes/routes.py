@@ -1688,9 +1688,47 @@ def get_voice(
 
 
 @router.get("/all-voices", response_model=List[VoiceOut])
-def list_voices(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-    voices = db.query(LLMVoice).all()
-    return voices
+def list_voices(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    voices_data = [
+        {
+            "voice_id": "openai-shimmer",
+            "voice_name": "Shimmer",
+            "provider": "elevnlabs",
+            "gender": "female",
+            "accent": "Neutral",
+            "age": "Adult",
+            "preview_audio_url": "https://example.com/previews/shimmer.mp3"
+        },
+        {
+            "voice_id": "elevn-echo",
+            "voice_name": "Echo",
+            "provider": "elevnlabs",
+            "gender": "male",
+            "accent": "British",
+            "age": "Middle-aged",
+            "preview_audio_url": "https://example.com/previews/echo.mp3"
+        },
+        {
+            "voice_id": "elevn-nova",
+            "voice_name": "Nova",
+            "provider": "elevnlabs",
+            "gender": "female",
+            "accent": "American",
+            "age": "Young Adult",
+            "preview_audio_url": "https://example.com/previews/nova.mp3"
+        },
+        {
+            "voice_id": "elevn-pulse",
+            "voice_name": "Pulse",
+            "provider": "elevnlabs",
+            "gender": "male",
+            "accent": "Australian",
+            "age": "Adult",
+            "preview_audio_url": "https://example.com/previews/pulse.mp3"
+        }
+    ]
+    
+    return [VoiceOut.model_validate(voice) for voice in voices_data]
 
 #import phone
 @router.post("/import-phone-number", response_model=PhoneNumberOut, status_code=201)
