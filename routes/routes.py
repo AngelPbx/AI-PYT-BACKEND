@@ -74,7 +74,7 @@ def check_username_availability(
             errors=[{"field": "server", "message": str(e)}]
         )
 
-@router.post("/signup")
+@router.post("/signup") 
 def signup(user: UserSignup, db: Session = Depends(get_db)):
     try:
         # Validate inputs
@@ -1478,18 +1478,60 @@ def create_agent(
     return agent
 
 
-@router.get("/all-agents/{workspace_id}", response_model=List[AgentOut])
-def list_agents(
-    workspace_id: int,
+# @router.get("/all-agents/{workspace_id}", response_model=List[AgentOut])
+# def list_agents(
+#     workspace_id: int,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     if not is_user_in_workspace(current_user.id, workspace_id, db):
+#         raise HTTPException(status_code=403, detail="You do not have access to this workspace")
+
+#     agents = db.query(pbx_ai_agent).filter(pbx_ai_agent.workspace_id == workspace_id).all()
+#     # print(db.query(pbx_ai_agent).all())
+#     return agents
+
+@router.get("/my-agents")
+def list_my_agents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if not is_user_in_workspace(current_user.id, workspace_id, db):
-        raise HTTPException(status_code=403, detail="You do not have access to this workspace")
+    try:
+        # Get all workspace IDs the user is a member of
+        workspace_ids = db.query(WorkspaceMember.workspace_id).filter(
+            WorkspaceMember.user_id == current_user.id
+        ).subquery()
 
-    agents = db.query(pbx_ai_agent).filter(pbx_ai_agent.workspace_id == workspace_id).all()
-    # print(db.query(pbx_ai_agent).all())
-    return agents
+        # Fetch all agents in those workspaces
+        agents = db.query(pbx_ai_agent).filter(
+            pbx_ai_agent.workspace_id.in_(workspace_ids)
+        ).all()
+
+        # Optionally, serialize if not using response_model directly
+        agent_list = [
+            {
+                "id": agent.id,
+                "name": agent.name,
+                "workspace_id": agent.workspace_id,
+                "description": agent.description,
+                "created_at": agent.created_at.isoformat() if agent.created_at else None,
+                "updated_at": agent.updated_at.isoformat() if agent.updated_at else None
+            } for agent in agents
+        ]
+
+        return format_response(
+            status=True,
+            message="Agents fetched successfully",
+            data=agent_list
+        )
+
+    except Exception as e:
+        db.rollback()
+        return format_response(
+            status=False,
+            message="Internal Server Error",
+            errors=[{"field": "server", "message": str(e)}]
+        )
 
 @router.get("/agents/{agent_id}", response_model=AgentOut)
 def get_agent(
