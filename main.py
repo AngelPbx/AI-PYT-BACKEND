@@ -14,14 +14,13 @@ from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
 app.include_router(router)
 
-def add_cors_middleware(app):
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"], 
-        allow_credentials=True, 
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Base.metadata.drop_all(bind=engine, checkfirst=True)  
 Base.metadata.create_all(bind=engine)
