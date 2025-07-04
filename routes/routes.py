@@ -49,7 +49,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 # Initialize OpenAI client
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-@router.get("/check-username") # ========>>>> METHOD NOT ALLOWED ERROR to be FIXED  
+@router.get("/check-username")
 def check_username_availability(
     username: str = Query(..., min_length=5, max_length=50),
     db: Session = Depends(get_db)
@@ -74,7 +74,7 @@ def check_username_availability(
             errors=[{"field": "server", "message": str(e)}]
         )
 
-@router.post("/signup") # ======>>>>>>> issue with check usernam while entreing
+@router.post("/signup")
 def signup(user: UserSignup, db: Session = Depends(get_db)):
     try:
         # Validate inputs

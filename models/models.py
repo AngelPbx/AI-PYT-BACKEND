@@ -15,7 +15,6 @@ class User(Base):
     full_name = Column(String, nullable=False)
     email = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    retall_api_key = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime, nullable=False)
     updated_at = Column(DateTime, default=datetime, onupdate=datetime, nullable=False)
     is_active = Column(Boolean, default=True)
