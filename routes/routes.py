@@ -154,11 +154,14 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
 @router.post("/login")
 def login(user: UserLogin, db: Session = Depends(get_db)):
     try:
-        db_user = db.query(User).filter(User.username == user.username).first()
+        db_user = db.query(User).filter(User.email == user.email).first()
         if not db_user or not verify_password(user.password, db_user.hashed_password):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        token, expire = create_token({"username": db_user.username, "expire_minutes": os.getenv("TOKEN_EXPIRE_MINUTES", 60)})
+        token, expire = create_token({
+            "username": db_user.username,  # You can keep username here if needed for JWT
+            "expire_minutes": os.getenv("TOKEN_EXPIRE_MINUTES", 60)
+        })
 
         return format_response(
             status=True,
@@ -167,6 +170,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
                 "token": 'Bearer ' + token,
                 "expires_at": expire.isoformat() + "Z",
                 "expire_duration_minutes": int(os.getenv("TOKEN_EXPIRE_MINUTES", 60)),
+                "retall_api_key": db_user.retall_api_key
             }
         )
 
