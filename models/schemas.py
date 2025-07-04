@@ -11,7 +11,7 @@ class UserSignup(BaseModel):
     retall_api_key: Optional[str] = None
 
 class UserLogin(BaseModel):
-    email: str
+    username: str
     password: str
 
 class UpdateUser(BaseModel):
