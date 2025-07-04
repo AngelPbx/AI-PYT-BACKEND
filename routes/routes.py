@@ -154,11 +154,11 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
 @router.post("/login")
 def login(user: UserLogin, db: Session = Depends(get_db)):
     try:
-        db_user = db.query(User).filter(User.username == user.username).first()
+        db_user = db.query(User).filter(User.email == user.email).first()
         if not db_user or not verify_password(user.password, db_user.hashed_password):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        token, expire = create_token({"username": db_user.username, "expire_minutes": os.getenv("TOKEN_EXPIRE_MINUTES", 60)})
+        token, expire = create_token({"email": db_user.email, "expire_minutes": os.getenv("TOKEN_EXPIRE_MINUTES", 60)})
 
         return format_response(
             status=True,
