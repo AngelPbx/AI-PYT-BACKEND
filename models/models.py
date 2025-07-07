@@ -214,14 +214,13 @@ class ChatSession(Base):
 # voice
 class LLMVoice(Base):
     __tablename__ = "voices"
-
-    voice_id = Column(String, primary_key=True, index=True)
-    voice_name = Column(String, nullable=False)
-    provider = Column(String, nullable=False)
-    gender = Column(String, nullable=False)
-    accent = Column(String, nullable=True)
-    age = Column(String, nullable=True)
-    preview_audio_url = Column(String, nullable=True)
+    voice_id = Column(String, primary_key=True, index=True)  # Use voice_id as primary key
+    voice_name = Column(String)
+    provider = Column(String)
+    gender = Column(String)
+    accent = Column(String)
+    age = Column(String)
+    preview_audio_url = Column(String)
 
 #import phone
 class ImportedPhoneNumber(Base):
