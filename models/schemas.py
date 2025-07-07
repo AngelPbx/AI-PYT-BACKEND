@@ -216,7 +216,7 @@ class KnowledgeFileOut(BaseModel):
     uploaded_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class StartAgentRequest(BaseModel):
     room: str
@@ -337,11 +337,14 @@ class VoiceCreate(VoiceBase):
 class VoiceOut(BaseModel):
     voice_id: str
     voice_name: str
-    provider: Literal["elevenlabs", "openai", "deepgram"]
-    gender: Literal["male", "female"]
-    accent: Optional[str] = None
-    age: Optional[str] = None
-    preview_audio_url: Optional[str] = None
+    provider: str
+    gender: str
+    accent: str
+    age: str
+    preview_audio_url: str
+
+    class Config:
+        from_attributes = True
     
 
 class VoiceListResponse(BaseModel):
@@ -376,4 +379,4 @@ class PhoneNumberOut(BaseModel):
     last_modification_timestamp: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True

@@ -1531,16 +1531,10 @@ def get_voice(
     }
 
 
-@router.get("/all-voices", response_model=VoiceListResponse)
-def list_voices(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)  # optional
-):
+@router.get("/all-voices", response_model=List[VoiceOut])
+def list_voices(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     voices = db.query(LLMVoice).all()
-    return {
-        "status": True,
-        "data": voices
-    }
+    return voices
 
 #import phone
 @router.post("/import-phone-number", response_model=PhoneNumberOut, status_code=201)
