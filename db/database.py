@@ -28,10 +28,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     from utils.security import decode_token
 
     payload = decode_token(token)
-    email = payload.get("email")
-    if not email:
-        raise HTTPException(status_code=401, detail="Invalid token payload: email not found")
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(User.email == payload.get("email")).first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
-    return user
+    return user 
