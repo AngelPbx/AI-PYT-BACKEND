@@ -369,8 +369,4 @@ async def entrypoint(ctx: JobContext):
 
 # --- CLI ---
 if __name__ == "__main__":
-<<<<<<< HEAD
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
-=======
     cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint,agent_name=os.getenv("ROOM")))
->>>>>>> 2d21b6074de868bd6fff08b0ac1c27cab3c9f33a
