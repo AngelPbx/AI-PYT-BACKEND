@@ -1,5 +1,5 @@
 import os, shutil, fitz
-from docx import Document
+from docx import Document  #pip install pymupdf python-docx
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
@@ -10,12 +10,8 @@ from sqlalchemy.orm import Session
 import uuid 
 import requests
 from bs4 import BeautifulSoup
-import time, json
-# from livekit.api import StartJobRequest
-# from livekit.api import CreateRoomRequest
+import time
 from typing import List
-from livekit.api import AccessToken, RoomAgentDispatch, RoomConfiguration, VideoGrants
-from livekit import api
 from sqlalchemy.orm import sessionmaker, Session
 from db.database import get_db, get_current_user
 from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, 
@@ -23,7 +19,7 @@ from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember,
                            ChatSession, LLMVoice, ImportedPhoneNumber
                            )
 from models.schemas import (
-    UserSignup, UserLogin, UpdateUser,TokenRequest, VoiceListResponse,KnowledgeFileOut,StartAgentRequest,DispatchRequest,
+    UserSignup, UserLogin, UpdateUser,
     WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, KnowledgeBaseCreate, 
     AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, CreateChatRequest, CreateChatResponse,
     VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut
@@ -37,10 +33,10 @@ from utils.security import (
     create_token
 )
 
-from db.database import engine, Base
-import logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from db.database import engine
+
+from starlette.requests import Request
+from starlette.config import Config
 
 router = APIRouter()
 
@@ -77,41 +73,7 @@ def check_username_availability(
             errors=[{"field": "server", "message": str(e)}]
         )
 
-
-# Request model
-
-LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
-LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
-LIVEKIT_URL=os.getenv("LIVEKIT_URL")
-
-
-
-# @router.post("/get-token")
-# def get_token(payload: TokenRequest):
-#     if not LIVEKIT_API_KEY or not LIVEKIT_API_SECRET:
-#         raise HTTPException(status_code=500, detail="LiveKit API credentials not configured")
-    
-#     token = api.AccessToken(os.getenv('LIVEKIT_API_KEY'), os.getenv('LIVEKIT_API_SECRET')) \
-#     .with_identity(payload.user_id) \
-#     .with_name(payload.user_id) \
-#     .with_grants(api.VideoGrants(
-#         room_join=True,
-#         room=payload.room_name,
-#     )) \
-#     .with_room_config(
-#             RoomConfiguration(
-#                 agents=[
-#                     RoomAgentDispatch(
-#                         agent_name=payload.agent_name,
-#                         metadata=f'{{"user_id": "{payload.user_id}"}}'
-#                     )
-#                 ]
-#             )
-#     )
-   
-#     return {"token": token.to_jwt()}
-
-@router.post("/signup")
+@router.post("/signup") 
 def signup(user: UserSignup, db: Session = Depends(get_db)):
     try:
         # Validate inputs
@@ -138,7 +100,6 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
             username=user.username,
             email=user.email,
             full_name=user.full_name,
-            retall_api_key=user.retall_api_key or os.getenv("RETAIL_API_KEY"),
             hashed_password=hash_password(user.password),
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
@@ -177,7 +138,6 @@ def signup(user: UserSignup, db: Session = Depends(get_db)):
             status=True,
             message="Signup successful",
             data={
-                "retall_api_key": new_user.retall_api_key,
                 "workspace_id": workspace.id,
                 "workspace_name": workspace.name
             }
@@ -198,14 +158,13 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
         if not db_user or not verify_password(user.password, db_user.hashed_password):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        token = create_token({"email": db_user.email, "expire_minutes": os.getenv("TOKEN_EXPIRE_MINUTES", 60)})
+        token = create_token(data={"email": db_user.email})
 
         return format_response(
             status=True,
             message="Login successful",
             data={
-                "token": 'Bearer ' + token,
-                "retall_api_key": db_user.retall_api_key
+                "token": 'Bearer ' + token
             }
         )
 
@@ -316,7 +275,100 @@ def update_user(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
-    
+# @router.put("/user/update")
+# def update_user(
+#     user_data: UpdateUser,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     try:
+#         existing_user = db.query(User).filter(User.id == current_user.id).first()
+#         if not existing_user:
+#             return format_response(
+#                 status=False,
+#                 message="User not found",
+#                 errors=[{"field": "user", "message": "User not found"}]
+#             )
+
+#         updated = False
+#         errors = []
+
+#         # Update username
+#         if user_data.username and user_data.username != existing_user.username:
+#             username_exists = db.query(User).filter(User.username == user_data.username).first()
+#             if username_exists:
+#                 errors.append({
+#                     "field": "username",
+#                     "message": "Username already taken"
+#                 })
+#             else:
+#                 existing_user.username = user_data.username
+#                 updated = True
+
+#         # Update email
+#         if user_data.email and user_data.email != existing_user.email:
+#             try:
+#                 validate_email(user_data.email)
+#             except Exception as e:
+#                 errors.append({
+#                     "field": "email",
+#                     "message": str(e)
+#                 })
+#             else:
+#                 email_exists = db.query(User).filter(User.email == user_data.email).first()
+#                 if email_exists:
+#                     errors.append({
+#                         "field": "email",
+#                         "message": "Email already registered"
+#                     })
+#                 else:
+#                     existing_user.email = user_data.email
+#                     updated = True
+
+#         # Update password
+#         if user_data.password:
+#             try:
+#                 validate_password(user_data.password)
+#             except Exception as e:
+#                 errors.append({
+#                     "field": "password",
+#                     "message": str(e)
+#                 })
+#             else:
+#                 existing_user.hashed_password = hash_password(user_data.password)
+#                 updated = True
+
+#         if errors:
+#             return format_response(
+#                 status=False,
+#                 message="Validation or conflict error",
+#                 errors=errors
+#             )
+
+#         if not updated:
+#             return format_response(
+#                 status=False,
+#                 message="No valid fields provided for update",
+#                 errors=[{"field": "update", "message": "Nothing to update"}]
+#             )
+
+#         db.commit()
+
+#         return format_response(
+#             status=True,
+#             message="User details updated successfully",
+#             data={}
+#         )
+
+#     except Exception as e:
+#         db.rollback()
+#         return format_response(
+#             status=False,
+#             message="Internal Server Error",
+#             errors=[{"field": "server", "message": str(e)}]
+#         )
+
+
 @router.get("/user/status")
 def check_user_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
@@ -341,7 +393,6 @@ def check_user_status(db: Session = Depends(get_db), current_user: User = Depend
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
-
 
 @router.post("/workspaces")
 def create_workspace(data: WorkspaceCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -532,13 +583,12 @@ def delete_workspace(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
-openai_client = OpenAI()
+
 @router.post("/workspaces/{workspace_id}/knowledge-bases")
-async def create_knowledge_base(
+def create_knowledge_base(
     workspace_id: int,
-    source_type: str = Form(...),  # 'file', 'url', or 'txt'
+    source_type: str = Form(...),  # 'file', 'web_page', or 'text'
     name: str = Form(...),
-    kb_id: str = Form(None),      
     file: UploadFile = File(None),
     url: str = Form(None),
     text_filename: str = Form(None),
@@ -547,136 +597,132 @@ async def create_knowledge_base(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        # ✅ Validate workspace ownership
-        workspace = db.query(Workspace).filter_by(id=workspace_id, owner_id=current_user.id).first()
+        workspace = db.query(Workspace).filter(
+            Workspace.id == workspace_id,
+            Workspace.owner_id == current_user.id
+        ).first()
+
         if not workspace:
-            return format_response(False, "Workspace not found", errors=[{"field": "workspace_id"}], status_code=404)
-
-        # ✅ Use existing KB if kb_id is provided and valid
-        kb = None
-        if kb_id:
-            kb = db.query(KnowledgeBase).filter_by(id=kb_id, workspace_id=workspace_id).first()
-            if not kb:
-                return format_response(False, "Knowledge base not found", errors=[{"field": "kb_id"}], status_code=404)
-        else:
-            # ✅ Create new KnowledgeBase if kb_id not provided
-            if not name.strip():
-                return format_response(False, "Knowledge base name is required", errors=[{"field": "name"}], status_code=400)
-
-            kb_id = uuid.uuid4().hex[:16]
-            now_utc = datetime.utcnow()
-            kb_path = UPLOAD_DIR / f"workspace_{workspace_id}" / f"knowledge_base_{kb_id}"
-            kb_path.mkdir(parents=True, exist_ok=True)
-
-            kb = KnowledgeBase(
-                id=kb_id,
-                name=name,
-                file_path=str(kb_path),
-                workspace_id=workspace_id,
-                enable_auto_refresh=True,
-                auto_refresh_interval=24,
-                last_refreshed=now_utc
+            return format_response(
+                status=False,
+                message="Workspace not found",
+                errors=[{"field": "workspace_id", "message": "Workspace not found"}],
+                status_code=404
             )
-            db.add(kb)
-            db.commit()
-            db.refresh(kb)
+            
+        if not name.strip():
+            return format_response(
+                status=False,
+                message="Validation error",
+                errors=[{"field": "name", "message": "Knowledge base name is required"}],
+                status_code=400
+            )
 
-        # ✅ Set up KB path
-        kb_path = Path(kb.file_path)
-        kb_path.mkdir(parents=True, exist_ok=True)
+        kb_id_str = f"knowledge_base_{uuid.uuid4().hex[:16]}"
+        kb_folder = UPLOAD_DIR / f"workspace_{workspace_id}" / kb_id_str
+        kb_folder.mkdir(parents=True, exist_ok=True)
 
-        # Handle content based on source_type
-        file_path, file_name, extract_text = None, None, ""
+        now_utc = datetime.utcnow()
+        file_path = None
+        file_name = None
+        source_details = {}
 
         if source_type == "file":
             if not file:
-                return format_response(False, "File is required", errors=[{"field": "file"}], status_code=400)
-
-            ext = Path(file.filename).suffix.lower()
+                return format_response(
+                    status=False,
+                    message="File upload required",
+                    errors=[{"field": "file", "message": "No file uploaded"}]
+                )
             file_name = f"{uuid.uuid4().hex}_{file.filename}"
-            file_path = kb_path / file_name
+            file_path = kb_folder / file_name
+            with open(file_path, "wb") as buffer:
+                buffer.write(file.file.read())
+            source_details = {
+                "type": "document",
+                "source_id": str(workspace_id),
+                "filename": file_name,
+                "file_url": str(file_path)
+            }
 
-            with open(file_path, "wb") as f_out:
-                f_out.write(await file.read())
+        elif source_type == "web_page":
+            if not url:
+                return format_response(
+                    status=False,
+                    message="URL required",
+                    errors=[{"field": "url", "message": "No URL provided"}]
+                )
+            file_name = f"web_{uuid.uuid4().hex}.txt"
+            file_path = kb_folder / file_name
+           
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(f"Crawled content from {url}")  # to complet crawler logic
+            source_details = {
+                "type": "web_page",
+                "source_id": str(workspace_id),
+                "filename": file_name,
+                "file_url": str(file_path)
+            }
 
-            if ext == ".pdf":
-                with fitz.open(file_path) as doc:
-                    extract_text = "\n".join(p.get_text() for p in doc)
-            elif ext == ".docx":
-                extract_text = "\n".join(p.text for p in Document(file_path).paragraphs)
-            elif ext == ".txt":
-                extract_text = file_path.read_text(encoding="utf-8")
-            else:
-                return format_response(False, "Unsupported file type", status_code=400)
-
-        elif source_type == "url":
-            if not url or not text_filename:
-                return format_response(False, "URL and filename required", status_code=400)
-            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-            res.raise_for_status()
-            soup = BeautifulSoup(res.text, "html.parser")
-            for tag in soup(["script", "style"]): tag.decompose()
-            extract_text = soup.get_text(separator="\n", strip=True)
-            file_name = text_filename
-            file_path = url  # Store raw URL
-
-        elif source_type == "txt":
+        elif source_type == "text":
             if not text_filename or not text_content:
-                return format_response(False, "Text filename and content required", status_code=400)
+                return format_response(
+                    status=False,
+                    message="Text filename and content required",
+                    errors=[{"field": "text", "message": "Missing text filename or content"}]
+                )
             file_name = f"{uuid.uuid4().hex}_{text_filename}.txt"
-            file_path = kb_path / file_name
-            file_path.write_text(text_content, encoding="utf-8")
-            extract_text = text_content
+            file_path = kb_folder / file_name
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(text_content)
+            source_details = {
+                "type": "text",
+                "source_id": str(workspace_id),
+                "filename": file_name,
+                "file_url": str(file_path)
+            }
 
         else:
-            return format_response(False, "Invalid source type", status_code=400)
+            return format_response(
+                status=False,
+                message="Invalid source type",
+                errors=[{"field": "source_type", "message": "Must be one of: file, web_page, text"}]
+            )
 
-        # ✅ Generate Embedding
-        clean_text = extract_text.replace("\n", " ").strip()
-        truncated = clean_text[:3000]
-
-        embedding_response = openai_client.embeddings.create(
-            model="text-embedding-3-small",
-            input=truncated
-        )
-        embedding_vector = embedding_response.data[0].embedding
-
-        # ✅ Save KnowledgeFile
-        kb_file = KnowledgeFile(
-            kb_id=kb.id,
-            filename=file_name,
+        kb = KnowledgeBase(
+            name=name,
             file_path=str(file_path),
-            extract_data=extract_text,
-            embedding=embedding_vector,
-            status=FileStatus.completed,
-            source_type=SourceStatus(source_type)
+            workspace_id=workspace_id,
+            enable_auto_refresh=True,
+            auto_refresh_interval=24,
+            last_refreshed=now_utc
         )
-        db.add(kb_file)
+        db.add(kb)
         db.commit()
+        db.refresh(kb)
+
+        response_data = {
+            "knowledge_base_id": kb_id_str,
+            "knowledge_base_name": kb.name,
+            "status": "in_progress",
+            "knowledge_base_sources": [source_details],
+            "enable_auto_refresh": kb.enable_auto_refresh,
+            "last_refreshed_timestamp": int(now_utc.timestamp() * 1000)
+        }
 
         return format_response(
             status=True,
-            message="Knowledge base updated successfully" if kb_id else "Knowledge base created successfully",
-            data={
-                "knowledge_base_id": f"knowledge_base_{kb.id}",
-                "knowledge_base_name": kb.name,
-                "status": kb_file.status.value,
-                "knowledge_base_sources": [{
-                    "source_id": kb_file.id,
-                    "type": source_type,
-                    "filename": file_name,
-                    "file_url": str(file_path)
-                }],
-                "enable_auto_refresh": kb.enable_auto_refresh,
-                "last_refreshed_timestamp": int(datetime.utcnow().timestamp() * 1000)
-            }
+            message="Knowledge base created successfully",
+            data=response_data
         )
 
     except Exception as e:
         db.rollback()
-        logger.error(f"❌ Error creating KB: {e}")
-        return format_response(False, "Internal Server Error", errors=[{"field": "server", "message": str(e)}], status_code=500)
-
+        return format_response(
+            status=False,
+            message="Internal Server Error",
+            errors=[{"field": "server", "message": str(e)}]
+        )
 
 @router.get("/workspaces/{workspace_id}/knowledge-bases")
 def list_kbs(
@@ -685,7 +731,6 @@ def list_kbs(
     current_user: User = Depends(get_current_user)
 ):
     try:
-        # Ensure user is a member of the workspace
         membership = db.query(WorkspaceMember).filter_by(
             workspace_id=workspace_id,
             user_id=current_user.id
@@ -699,29 +744,17 @@ def list_kbs(
                 status_code=403
             )
 
-        # Fetch knowledge bases
         kbs = db.query(KnowledgeBase).filter_by(workspace_id=workspace_id).all()
 
-        # Build response
-        data = []
-        for kb in kbs:
-            sources = []
-            for f in kb.knowledge_files:
-                sources.append({
-                    "source_id": f.id,
-                    "type": f.source_type.value,  # Example: "file", "web_page", etc.
-                    "filename": f.filename,
-                    "file_url": f.file_path
-                })
-
-            data.append({
-                "knowledge_base_id": kb.id,
-                "knowledge_base_name": kb.name,
-                "status": "in_progress",  # or use kb status if available
-                "knowledge_base_sources": sources,
-                "enable_auto_refresh": kb.enable_auto_refresh,
-                "last_refreshed_timestamp": int(kb.last_refreshed.timestamp() * 1000) if kb.last_refreshed else None
-            })
+        data = [
+            {
+                "id": kb.id,
+                "name": kb.name,
+                "file_path": kb.file_path,
+                "workspace_id": kb.workspace_id,
+                "created_at": format_datetime_ist(kb.created_at)
+            } for kb in kbs
+        ]
 
         return format_response(
             status=True,
@@ -736,7 +769,6 @@ def list_kbs(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
-
 
 # To create a knowledge base, we need to ensure the user is a member of the workspace
 @router.post("/knowledge-bases")
@@ -858,6 +890,117 @@ def get_knowledge_base(
             status_code=500
         )
        
+from openai import OpenAI
+
+config = Config(".env")
+
+# Ensure you initialize OpenAI client
+openai_client = OpenAI()
+
+@router.post("/knowledge-bases/sources")
+async def add_kb_source(
+    kb_id: str = Form(...),
+    source_type: str = Form(...),
+    file: UploadFile = File(None),
+    url: str = Form(None),
+    text_filename: str = Form(None),
+    text_content: str = Form(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        # Validate KB and user membership
+        kb = db.query(KnowledgeBase).filter_by(id=kb_id).first()
+        if not kb:
+            return format_response(False, "Knowledge base not found", errors=[{"field": "kb_id"}], status_code=404)
+
+        member = db.query(WorkspaceMember).filter_by(workspace_id=kb.workspace_id, user_id=current_user.id).first()
+        if not member:
+            return format_response(False, "Access denied", errors=[{"field": "workspace"}], status_code=403)
+
+        # Directory setup
+        kb_path = UPLOAD_DIR / f"workspace_{kb.workspace_id}" / f"knowledge_base_{kb_id}"
+        kb_path.mkdir(parents=True, exist_ok=True)
+
+        # Process content
+        file_path, file_name, extract_text = None, None, ""
+
+        if source_type == "file":
+            if not file:
+                return format_response(False, "File is required", errors=[{"field": "file"}], status_code=400)
+
+            ext = Path(file.filename).suffix.lower()
+            file_name = f"{uuid4().hex}_{file.filename}"
+            file_path = kb_path / file_name
+
+            with open(file_path, "wb") as f_out:
+                f_out.write(await file.read())
+
+            if ext == ".pdf":
+                with fitz.open(file_path) as doc:
+                    extract_text = "\n".join(p.get_text() for p in doc)
+            elif ext == ".docx":
+                extract_text = "\n".join(p.text for p in Document(file_path).paragraphs)
+            elif ext == ".txt":
+                extract_text = file_path.read_text(encoding="utf-8")
+            else:
+                return format_response(False, "Unsupported file type", status_code=400)
+
+        elif source_type == "web_page":
+            if not url or not text_filename:
+                return format_response(False, "URL and filename required", status_code=400)
+            res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+            res.raise_for_status()
+            soup = BeautifulSoup(res.text, "html.parser")
+            for tag in soup(["script", "style"]): tag.decompose()
+            extract_text = soup.get_text(separator="\n", strip=True)
+            file_name = text_filename
+            file_path = url
+
+        elif source_type == "txt":
+            if not text_filename or not text_content:
+                return format_response(False, "Text filename and content required", status_code=400)
+            file_name = f"{uuid4().hex}_{text_filename}.txt"
+            file_path = kb_path / file_name
+            file_path.write_text(text_content, encoding="utf-8")
+            extract_text = text_content
+
+        else:
+            return format_response(False, "Invalid source type", status_code=400)
+
+        clean_text = extract_text.replace("\n", " ").strip()
+        truncated = clean_text[:3000]  # limit tokens for embedding
+
+        embedding_response = openai_client.embeddings.create(
+            model="text-embedding-3-small",
+            input=truncated
+        )
+        embedding_vector = embedding_response.data[0].embedding
+
+        # Save to DB
+        kb_file = KnowledgeFile(
+            kb_id=kb.id,
+            filename=file_name,
+            file_path=str(file_path),
+            extract_data=extract_text,
+            embedding=embedding_vector,  # ➕ store embedding
+            status=FileStatus.completed,
+            source_type=SourceStatus(source_type)
+        )
+        db.add(kb_file)
+        db.commit()
+
+        return format_response(True, "Source added with embedding", data={
+            "source_id": kb_file.id,
+            "filename": file_name,
+            "file_url": str(file_path),
+            "type": source_type,
+        })
+
+    except Exception as e:
+        db.rollback()
+        return format_response(False, "Internal Server Error", errors=[{"field": "server", "message": str(e)}], status_code=500)
+
 @router.delete("/knowledge-bases/{kb_id}")
 def delete_knowledge_base(
     kb_id: str,
@@ -1098,11 +1241,11 @@ def list_knowledge_bases(
                     "type": "document",
                     "source_id": str(file.id),
                     "filename": file.filename,
-                    # "file_url": file.file_url 
+                    "file_url": file.file_url 
                 })
 
             result.append({
-                "knowledge_base_id": f"{kb.id}",
+                "knowledge_base_id": f"knowledge_base_{kb.id}",
                 "knowledge_base_name": kb.name,
                 "status": getattr(kb, "status", "in_progress"),
                 "knowledge_base_sources": file_sources,
@@ -1319,18 +1462,60 @@ def create_agent(
     return agent
 
 
-@router.get("/all-agents/{workspace_id}", response_model=List[AgentOut])
-def list_agents(
-    workspace_id: int,
+# @router.get("/all-agents/{workspace_id}", response_model=List[AgentOut])
+# def list_agents(
+#     workspace_id: int,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     if not is_user_in_workspace(current_user.id, workspace_id, db):
+#         raise HTTPException(status_code=403, detail="You do not have access to this workspace")
+
+#     agents = db.query(pbx_ai_agent).filter(pbx_ai_agent.workspace_id == workspace_id).all()
+#     # print(db.query(pbx_ai_agent).all())
+#     return agents
+
+@router.get("/all-agents")
+def list_my_agents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if not is_user_in_workspace(current_user.id, workspace_id, db):
-        raise HTTPException(status_code=403, detail="You do not have access to this workspace")
+    try:
+        # Get all workspace IDs the user is a member of
+        workspace_ids = db.query(WorkspaceMember.workspace_id).filter(
+            WorkspaceMember.user_id == current_user.id
+        ).subquery()
 
-    agents = db.query(pbx_ai_agent).filter(pbx_ai_agent.workspace_id == workspace_id).all()
-    # print(db.query(pbx_ai_agent).all())
-    return agents
+        # Fetch all agents in those workspaces
+        agents = db.query(pbx_ai_agent).filter(
+            pbx_ai_agent.workspace_id.in_(workspace_ids)
+        ).all()
+
+        # Optionally, serialize if not using response_model directly
+        agent_list = [
+            {
+                "id": agent.id,
+                "name": agent.name,
+                "workspace_id": agent.workspace_id,
+                "description": agent.description,
+                "created_at": agent.created_at.isoformat() if agent.created_at else None,
+                "updated_at": agent.updated_at.isoformat() if agent.updated_at else None
+            } for agent in agents
+        ]
+
+        return format_response(
+            status=True,
+            message="Agents fetched successfully",
+            data=agent_list
+        )
+
+    except Exception as e:
+        db.rollback()
+        return format_response(
+            status=False,
+            message="Internal Server Error",
+            errors=[{"field": "server", "message": str(e)}]
+        )
 
 @router.get("/agents/{agent_id}", response_model=AgentOut)
 def get_agent(
@@ -1390,17 +1575,38 @@ def create_pbx_llm(
    
     return PBXLLMOut.model_validate(llm)
 
-@router.get("/pbx-llms/{llm_id}", response_model=PBXLLMOut)
+@router.get("/pbx-llms", response_model=PBXLLMOut)
 def get_pbx_llm(
-    llm_id: str,
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)  # Kept for consistency, though not used
 ):
+    # Hardcoded data
+    llm_data = {
+        "workspace_id": 1,
+        "version": 1,
+        "model": "gpt-4o",
+        "s2s_model": "whisper-large-v3",
+        "model_temperature": 0.7,
+        "model_high_priority": True,
+        "tool_call_strict_mode": False,
+        "general_prompt": "## Identity\nYou are Kate from the appointment department at Webvio Health calling Cindy over the phone to prepare for the annual checkup coming up. You are a pleasant and friendly receptionist caring deeply for the user. You don't provide medical advice but would use the medical knowledge to understand user responses.\n\n## Style Guardrails\nBe Concise: Respond succinctly, addressing one topic at most.\nEmbrace Variety: Use diverse language and rephrasing to enhance clarity without repeating content.\nBe Conversational: Use everyday language, making the chat feel like talking to a friend.\nBe Proactive: Lead the conversation, often wrapping up with a question or next-step suggestion.\nAvoid multiple questions in a single response.\nGet clarity: If the user only partially answers a question, or if the answer is unclear, keep asking to get clarity.\nUse a colloquial way of referring to the date (like Friday, January 14th, or Tuesday, January 12th, 2024 at 8am).\n\n## Response Guideline\nAdapt and Guess: Try to understand transcripts that may contain transcription errors. Avoid mentioning \"transcription error\" in the response.",
+        "general_tools": [
+            {
+                "type": "end_call",
+                "name": "end_call",
+                "description": "Hang up the call"
+            }
+        ],
+        "begin_message": "Connecting you with the assistant...",
+        "default_dynamic_variables": {
+            "company_name": "VoiceAI",
+            "timezone": "UTC+5:30"
+        },
+        "knowledge_base_ids": []
+    }
     
-    llm = db.query(PBXLLM).filter(PBXLLM.id == llm_id).first()
-    if not llm:
-        raise HTTPException(status_code=404, detail="LLM not found")
-    return PBXLLMOut.model_validate(llm)
+    # Validate and return the data using PBXLLMOut
+    return PBXLLMOut.model_validate(llm_data)
 
 
 @router.get("/all-pbx-llms/{workspace_id}", response_model=List[PBXLLMOut])
@@ -1478,22 +1684,51 @@ def get_voice(
     voice = db.query(LLMVoice).filter_by(voice_id=voice_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
-    return {
-        "status": True,
-        "data": voice
-    }
+    return voice
 
 
-@router.get("/all-voices", response_model=VoiceListResponse)
-def list_voices(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)  # optional
-):
-    voices = db.query(LLMVoice).all()
-    return {
-        "status": True,
-        "data": voices
-    }
+@router.get("/all-voices", response_model=List[VoiceOut])
+def list_voices(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    voices_data = [
+        {
+            "voice_id": "openai-shimmer",
+            "voice_name": "Shimmer",
+            "provider": "elevenlabs",
+            "gender": "female",
+            "accent": "Neutral",
+            "age": "Adult",
+            "preview_audio_url": "https://example.com/previews/shimmer.mp3"
+        },
+        {
+            "voice_id": "elevn-echo",
+            "voice_name": "Echo",
+            "provider": "elevenlabs",
+            "gender": "male",
+            "accent": "British",
+            "age": "Middle-aged",
+            "preview_audio_url": "https://example.com/previews/echo.mp3"
+        },
+        {
+            "voice_id": "elevn-nova",
+            "voice_name": "Nova",
+            "provider": "elevenlabs",
+            "gender": "female",
+            "accent": "American",
+            "age": "Young Adult",
+            "preview_audio_url": "https://example.com/previews/nova.mp3"
+        },
+        {
+            "voice_id": "elevn-pulse",
+            "voice_name": "Pulse",
+            "provider": "elevenlabs",
+            "gender": "male",
+            "accent": "Australian",
+            "age": "Adult",
+            "preview_audio_url": "https://example.com/previews/pulse.mp3"
+        }
+    ]
+    
+    return [VoiceOut.model_validate(voice) for voice in voices_data]
 
 #import phone
 @router.post("/import-phone-number", response_model=PhoneNumberOut, status_code=201)
@@ -1546,3 +1781,92 @@ def list_phone_numbers(
     current_user: User = Depends(get_current_user)  # optional
 ):
     return db.query(ImportedPhoneNumber).all()
+
+# @router.get("/auth/github/login")
+# async def github_login(request: Request):
+#     redirect_uri = request.url_for("github_callback")
+#     return await oauth.github.authorize_redirect(request, redirect_uri)
+
+# @router.get("/auth/github/callback")
+# async def github_callback(request: Request, db: Session = Depends(get_db)):
+#     try:
+#         token = await oauth.github.authorize_access_token(request)
+#         github_user = await oauth.github.get('user', token=token)
+#         github_user = github_user.json()
+
+#         username = github_user["login"]
+#         email = github_user.get("email")
+
+#         if not email:
+#             # GitHub may hide public email, so fetch from email endpoint
+#             emails = await oauth.github.get('user/emails', token=token)
+#             email_list = emails.json()
+#             email = next((item["email"] for item in email_list if item["primary"] and item["verified"]), None)
+
+#         if not email:
+#             raise HTTPException(status_code=400, detail="Email not available from GitHub")
+
+#         user = db.query(User).filter(User.email == email).first()
+
+#         if not user:
+#             # Create new user
+#             user = User(
+#                 username=username,
+#                 email=email,
+#                 full_name=github_user.get("name") or username,
+#                 hashed_password="",
+#                 created_at=datetime.utcnow(),
+#                 updated_at=datetime.utcnow()
+#             )
+#             db.add(user)
+#             db.commit()
+#             db.refresh(user)
+
+#             # Create workspace and membership
+#             workspace = Workspace(
+#                 name=f"{username}_workspace",
+#                 description="Default workspace",
+#                 owner_id=user.id,
+#                 created_at=datetime.utcnow()
+#             )
+#             db.add(workspace)
+#             db.commit()
+#             db.refresh(workspace)
+
+#             settings = WorkspaceSettings(
+#                 workspace_id=workspace.id,
+#                 default_model="gpt-4",
+#                 default_voice="echo",
+#                 temperature=1
+#             )
+#             member = WorkspaceMember(
+#                 user_id=user.id,
+#                 workspace_id=workspace.id,
+#                 role="owner"
+#             )
+#             db.add_all([settings, member])
+#             db.commit()
+
+#         # Issue JWT token
+#         token, expire = create_token({
+#             "username": user.username,
+#             "expire_minutes": os.getenv("TOKEN_EXPIRE_MINUTES", 60)
+#         })
+
+#         return format_response(
+#             status=True,
+#             message="GitHub login successful",
+#             data={
+#                 "token": "Bearer " + token,
+#                 "expires_at": expire.isoformat() + "Z",
+#                 "expire_duration_minutes": int(os.getenv("TOKEN_EXPIRE_MINUTES", 60)),
+#             }
+#         )
+
+#     except Exception as e:
+#         db.rollback()
+#         return format_response(
+#             status=False,
+#             message="GitHub login failed",
+#             errors=[{"field": "server", "message": str(e)}]
+#         )

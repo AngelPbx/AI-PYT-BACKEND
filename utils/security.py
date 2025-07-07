@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from jose import jwt, 
+from jose import jwt
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer
 from config.settings import SECRET_KEY, ALGORITHM
@@ -14,20 +14,19 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return pwd_context.verify(password, hashed)
 
-def create_token(data: dict, expire_minutes: int = 1440) -> str:
+# def create_token(data: dict):
+#     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
+
+def create_token(data: dict, expire_minutes: int = 1440):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=expire_minutes)
     to_encode.update({"exp": expire})
     token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return token
 
-def decode_token(token: str) -> dict:
+
+def decode_token(token: str):
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Token error: {str(e)}")

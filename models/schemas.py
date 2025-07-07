@@ -253,7 +253,7 @@ class PBXLLMOut(BaseModel):
     knowledge_base_ids: List[int]
 
     class Config:
-        from_attributes = True
+        orm_mode = True
 
 #  Chat room -----------------------------------------------
 
@@ -333,7 +333,7 @@ class VoiceOut(BaseModel):
     preview_audio_url: str
 
     class Config:
-        from_attributes = True
+        orm_mode = True
     
 
 class VoiceListResponse(BaseModel):
