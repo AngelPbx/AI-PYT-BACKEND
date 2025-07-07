@@ -1837,7 +1837,61 @@ def list_voices(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
-
+# @router.get("/all-voicess", response_model=List[VoiceOut])
+# def list_voices(
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db)
+# ):
+#     try:
+#         voices_data = [
+#             {
+#                 "voice_id": "openai-shimmer",
+#                 "voice_name": "Shimmer",
+#                 "provider": "elevenlabs",
+#                 "gender": "female",
+#                 "accent": "Neutral",
+#                 "age": "Adult",
+#                 "preview_audio_url": "https://example.com/previews/shimmer.mp3"
+#             },
+#             {
+#                 "voice_id": "elevn-echo",
+#                 "voice_name": "Echo",
+#                 "provider": "elevenlabs",
+#                 "gender": "male",
+#                 "accent": "British",
+#                 "age": "Middle-aged",
+#                 "preview_audio_url": "https://example.com/previews/echo.mp3"
+#             },
+#             {
+#                 "voice_id": "elevn-nova",
+#                 "voice_name": "Nova",
+#                 "provider": "elevenlabs",
+#                 "gender": "female",
+#                 "accent": "American",
+#                 "age": "Young Adult",
+#                 "preview_audio_url": "https://example.com/previews/nova.mp3"
+#             },
+#             {
+#                 "voice_id": "elevn-pulse",
+#                 "voice_name": "Pulse",
+#                 "provider": "elevenlabs",
+#                 "gender": "male",
+#                 "accent": "Australian",
+#                 "age": "Adult",
+#                 "preview_audio_url": "https://example.com/previews/pulse.mp3"
+#             }
+#         ]
+#         # Convert to VoiceOut objects and return as a list
+#         return [VoiceOut.model_validate(voice) for voice in voices_data]
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail={
+#                 "status": False,
+#                 "message": "Internal Server Error",
+#                 "errors": [{"field": "server", "message": str(e)}]
+#             }
+#         )
 #import phone
 @router.post("/import-phone-number", response_model=PhoneNumberOut, status_code=201)
 def import_phone_number(
