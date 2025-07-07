@@ -11,6 +11,7 @@ import uuid
 import requests
 from bs4 import BeautifulSoup
 import time
+from livekit import api
 from typing import List
 from sqlalchemy.orm import sessionmaker, Session
 from db.database import get_db, get_current_user
@@ -19,7 +20,7 @@ from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember,
                            ChatSession, LLMVoice, ImportedPhoneNumber
                            )
 from models.schemas import (
-    UserSignup, UserLogin, UpdateUser,
+    UserSignup, UserLogin, UpdateUser,DispatchRequest,
     WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, KnowledgeBaseCreate, 
     AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, CreateChatRequest, CreateChatResponse,
     VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut
@@ -32,6 +33,7 @@ from utils.security import (
     hash_password, verify_password,
     create_token
 )
+
 
 from db.database import engine
 
@@ -72,6 +74,8 @@ def check_username_availability(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
+
+
 
 @router.post("/signup") 
 def signup(user: UserSignup, db: Session = Depends(get_db)):
@@ -368,6 +372,27 @@ def update_user(
 #             errors=[{"field": "server", "message": str(e)}]
 #         )
 
+@router.post("/create-dispatch")
+async def create_dispatch(request: DispatchRequest):
+    lkapi = api.LiveKitAPI()
+    try:
+        dispatch = await lkapi.agent_dispatch.create_dispatch(
+            api.CreateAgentDispatchRequest(
+                agent_name=request.agent_name,
+                room=request.room_name,
+                metadata=json.dumps(request.metadata)
+            )
+        )
+        return {
+            "status": "success",
+            "dispatch_id": dispatch.id,
+            "room": dispatch.room,
+            "agent_name": dispatch.agent_name
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await lkapi.aclose()    
 
 @router.get("/user/status")
 def check_user_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
