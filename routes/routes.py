@@ -83,80 +83,33 @@ def check_username_availability(
 LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
 LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
 LIVEKIT_URL=os.getenv("LIVEKIT_URL")
-AGENT_NAME = os.getenv("ROOM")
 
-# @router.post("/start-agent")
-# async def start_agent(req: StartAgentRequest):
-#     # Step 1: Create Room (if not exists)
-#     try:
-#         async with api.LiveKitAPI() as lkapi:
-#             room = await lkapi.room.create_room(CreateRoomRequest(
-#                 name="myroom",
-#                 empty_timeout=10 * 60,
-#                 max_participants=20,
-                
-#             ))
-#     except Exception as e:
-#         if "already exists" not in str(e):
-#             raise HTTPException(status_code=500, detail=f"Failed to create room: {e}")
 
-#     # Step 2: Start Agent Job
-#     try:
-#         job = await lkapi.agent.start_job(StartJobRequest(
-#             agent_name="ankit",  # Change this to your CLI agent name
-#             room="myroom",
-           
-#         ))
-#         return {"status": "started", "job_id": job.job_id, "room": req.room}
-#     except Exception as e:
-#         raise HTTPException(status_code=500, detail=f"Failed to start agent: {e}")
 
-@router.post("/create-dispatch")
-async def create_dispatch(request: DispatchRequest):
-    lkapi = api.LiveKitAPI()
-    try:
-        dispatch = await lkapi.agent_dispatch.create_dispatch(
-            api.CreateAgentDispatchRequest(
-                agent_name=request.agent_name,
-                room=request.room_name,
-                metadata=json.dumps(request.metadata)
-            )
-        )
-        return {
-            "status": "success",
-            "dispatch_id": dispatch.id,
-            "room": dispatch.room,
-            "agent_name": dispatch.agent_name
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        await lkapi.aclose()    
-
-@router.post("/get-token")
-def get_token(payload: TokenRequest):
-    if not LIVEKIT_API_KEY or not LIVEKIT_API_SECRET:
-        raise HTTPException(status_code=500, detail="LiveKit API credentials not configured")
+# @router.post("/get-token")
+# def get_token(payload: TokenRequest):
+#     if not LIVEKIT_API_KEY or not LIVEKIT_API_SECRET:
+#         raise HTTPException(status_code=500, detail="LiveKit API credentials not configured")
     
-    token = api.AccessToken(os.getenv('LIVEKIT_API_KEY'), os.getenv('LIVEKIT_API_SECRET')) \
-    .with_identity(payload.user_id) \
-    .with_name(payload.user_id) \
-    .with_grants(api.VideoGrants(
-        room_join=True,
-        room=payload.room_name,
-    )) \
-    .with_room_config(
-            RoomConfiguration(
-                agents=[
-                    RoomAgentDispatch(
-                        agent_name=payload.agent_name,
-                        metadata=f'{{"user_id": "{payload.user_id}"}}'
-                    )
-                ]
-            )
-    )
+#     token = api.AccessToken(os.getenv('LIVEKIT_API_KEY'), os.getenv('LIVEKIT_API_SECRET')) \
+#     .with_identity(payload.user_id) \
+#     .with_name(payload.user_id) \
+#     .with_grants(api.VideoGrants(
+#         room_join=True,
+#         room=payload.room_name,
+#     )) \
+#     .with_room_config(
+#             RoomConfiguration(
+#                 agents=[
+#                     RoomAgentDispatch(
+#                         agent_name=payload.agent_name,
+#                         metadata=f'{{"user_id": "{payload.user_id}"}}'
+#                     )
+#                 ]
+#             )
+#     )
    
-    return {"token": token.to_jwt()}
+#     return {"token": token.to_jwt()}
 
 @router.post("/signup")
 def signup(user: UserSignup, db: Session = Depends(get_db)):
