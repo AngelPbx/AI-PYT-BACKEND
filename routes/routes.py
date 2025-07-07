@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 import uuid 
 import requests
 from bs4 import BeautifulSoup
-import time
+import time,json
 from livekit import api
 from typing import List
 from sqlalchemy.orm import sessionmaker, Session
