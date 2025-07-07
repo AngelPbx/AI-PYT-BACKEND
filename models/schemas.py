@@ -124,7 +124,20 @@ class Pronunciation(BaseModel):
     word: str
     alphabet: str
     phoneme: str
-
+    
+class PhoneNumberOut(BaseModel):
+    id: str
+    phone_number: str
+    phone_number_type: str
+    phone_number_pretty: str
+    inbound_agent_id: str
+    outbound_agent_id: str
+    inbound_agent_version: str
+    outbound_agent_version: str
+    area_code: str
+    nickname: str
+    inbound_webhook_url: str
+    last_modification_timestamp: str
 class PostCallAnalysis(BaseModel):
     type: str
     name: str
@@ -258,7 +271,7 @@ class PBXLLMOut(BaseModel):
     knowledge_base_ids: List[int]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 #  Chat room -----------------------------------------------
 
@@ -338,7 +351,7 @@ class VoiceOut(BaseModel):
     preview_audio_url: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
     
 
 class VoiceListResponse(BaseModel):
@@ -357,20 +370,3 @@ class PhoneNumberCreate(BaseModel):
     outbound_agent_version: Optional[int] = None
     nickname: Optional[str] = None
     inbound_webhook_url: Optional[str] = None
-
-class PhoneNumberOut(BaseModel):
-    id: int
-    phone_number: str
-    phone_number_type: str
-    phone_number_pretty: str
-    inbound_agent_id: Optional[str]
-    outbound_agent_id: Optional[str]
-    inbound_agent_version: Optional[int]
-    outbound_agent_version: Optional[int]
-    area_code: int
-    nickname: Optional[str]
-    inbound_webhook_url: Optional[str]
-    last_modification_timestamp: int
-
-    class Config:
-        from_attributes = True
