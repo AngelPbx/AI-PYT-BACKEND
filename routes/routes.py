@@ -1713,47 +1713,64 @@ def get_voice(
 
 
 @router.get("/all-voices", response_model=List[VoiceOut])
-def list_voices(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    voices_data = [
-        {
-            "voice_id": "openai-shimmer",
-            "voice_name": "Shimmer",
-            "provider": "elevenlabs",
-            "gender": "female",
-            "accent": "Neutral",
-            "age": "Adult",
-            "preview_audio_url": "https://example.com/previews/shimmer.mp3"
-        },
-        {
-            "voice_id": "elevn-echo",
-            "voice_name": "Echo",
-            "provider": "elevenlabs",
-            "gender": "male",
-            "accent": "British",
-            "age": "Middle-aged",
-            "preview_audio_url": "https://example.com/previews/echo.mp3"
-        },
-        {
-            "voice_id": "elevn-nova",
-            "voice_name": "Nova",
-            "provider": "elevenlabs",
-            "gender": "female",
-            "accent": "American",
-            "age": "Young Adult",
-            "preview_audio_url": "https://example.com/previews/nova.mp3"
-        },
-        {
-            "voice_id": "elevn-pulse",
-            "voice_name": "Pulse",
-            "provider": "elevenlabs",
-            "gender": "male",
-            "accent": "Australian",
-            "age": "Adult",
-            "preview_audio_url": "https://example.com/previews/pulse.mp3"
-        }
-    ]
-    
-    return [VoiceOut.model_validate(voice) for voice in voices_data]
+def list_voices(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        voices_data = [
+            {
+                "voice_id": "openai-shimmer",
+                "voice_name": "Shimmer",
+                "provider": "elevenlabs",
+                "gender": "female",
+                "accent": "Neutral",
+                "age": "Adult",
+                "preview_audio_url": "https://example.com/previews/shimmer.mp3"
+            },
+            {
+                "voice_id": "elevn-echo",
+                "voice_name": "Echo",
+                "provider": "elevenlabs",
+                "gender": "male",
+                "accent": "British",
+                "age": "Middle-aged",
+                "preview_audio_url": "https://example.com/previews/echo.mp3"
+            },
+            {
+                "voice_id": "elevn-nova",
+                "voice_name": "Nova",
+                "provider": "elevenlabs",
+                "gender": "female",
+                "accent": "American",
+                "age": "Young Adult",
+                "preview_audio_url": "https://example.com/previews/nova.mp3"
+            },
+            {
+                "voice_id": "elevn-pulse",
+                "voice_name": "Pulse",
+                "provider": "elevenlabs",
+                "gender": "male",
+                "accent": "Australian",
+                "age": "Adult",
+                "preview_audio_url": "https://example.com/previews/pulse.mp3"
+            }
+        ]
+
+        data = [VoiceOut.model_validate(voice).dict() for voice in voices_data]
+
+        return format_response(
+            status=True,
+            message="Voices retrieved successfully",
+            data=data
+        )
+
+    except Exception as e:
+        return format_response(
+            status=False,
+            message="Internal Server Error",
+            errors=[{"field": "server", "message": str(e)}]
+        )
 
 #import phone
 @router.post("/import-phone-number", response_model=PhoneNumberOut, status_code=201)
@@ -1895,3 +1912,84 @@ def list_phone_numbers(
 #             message="GitHub login failed",
 #             errors=[{"field": "server", "message": str(e)}]
 #         )
+
+@router.get("/list-phone-numbers")
+def list_phone_numbers(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        phone_numbers_data = [
+            {
+                "id": "pn_001",
+                "phone_number": "+14157774444",
+                "phone_number_type": "retell-twilio",
+                "phone_number_pretty": "+1 (415) 777-4444",
+                "inbound_agent_id": "oBeDLoLOeuAbiuaMFXRtDOLriTJ5tSxD",
+                "outbound_agent_id": "oBeDLoLOeuAbiuaMFXRtDOLriTJ5tSxD",
+                "inbound_agent_version": "v1.0",
+                "outbound_agent_version": "v1.0",
+                "area_code": "415",
+                "nickname": "Main Line",
+                "inbound_webhook_url": "https://api.example.com/webhooks/inbound/main",
+                "last_modification_timestamp": "2025-07-07T18:45:00+05:30"
+            },
+            {
+                "id": "pn_002",
+                "phone_number": "+12025550123",
+                "phone_number_type": "retell-twilio",
+                "phone_number_pretty": "+1 (202) 555-0123",
+                "inbound_agent_id": "xYcZMnPQrsTuvWxyZABcDEFghIJkLmNo",
+                "outbound_agent_id": "xYcZMnPQrsTuvWxyZABcDEFghIJkLmNo",
+                "inbound_agent_version": "v1.1",
+                "outbound_agent_version": "v1.1",
+                "area_code": "202",
+                "nickname": "Support Line",
+                "inbound_webhook_url": "https://api.example.com/webhooks/inbound/support",
+                "last_modification_timestamp": "2025-07-06T12:30:00+05:30"
+            },
+            {
+                "id": "pn_003",
+                "phone_number": "+13105556789",
+                "phone_number_type": "retell-twilio",
+                "phone_number_pretty": "+1 (310) 555-6789",
+                "inbound_agent_id": "pQrStUvWxYzAbCdEfGhIjKlMnOpQrStU",
+                "outbound_agent_id": "pQrStUvWxYzAbCdEfGhIjKlMnOpQrStU",
+                "inbound_agent_version": "v2.0",
+                "outbound_agent_version": "v2.0",
+                "area_code": "310",
+                "nickname": "Sales Line",
+                "inbound_webhook_url": "https://api.example.com/webhooks/inbound/sales",
+                "last_modification_timestamp": "2025-07-05T09:15:00+05:30"
+            },
+            {
+                "id": "pn_004",
+                "phone_number": "+14405559876",
+                "phone_number_type": "retell-twilio",
+                "phone_number_pretty": "+1 (440) 555-9876",
+                "inbound_agent_id": "aBcDeFgHiJkLmNoPqRsTuVwXyZaBcDeF",
+                "outbound_agent_id": "aBcDeFgHiJkLmNoPqRsTuVwXyZaBcDeF",
+                "inbound_agent_version": "v1.2",
+                "outbound_agent_version": "v1.2",
+                "area_code": "440",
+                "nickname": "Customer Care",
+                "inbound_webhook_url": "https://api.example.com/webhooks/inbound/customer",
+                "last_modification_timestamp": "2025-07-04T14:20:00+05:30"
+            }
+        ]
+
+        # Validate data with PhoneNumberOut schema
+        data = [PhoneNumberOut(**phone).dict() for phone in phone_numbers_data]
+
+        return format_response(
+            status=True,
+            message="Phone numbers retrieved successfully",
+            data=data
+        )
+
+    except Exception as e:
+        return format_response(
+            status=False,
+            message="Internal Server Error",
+            errors=[{"field": "server", "message": str(e)}]
+        )
