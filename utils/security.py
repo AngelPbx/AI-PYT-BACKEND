@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from jose import jwt, 
+from jose import jwt
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer
 from config.settings import SECRET_KEY, ALGORITHM
