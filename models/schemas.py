@@ -11,7 +11,7 @@ class UserSignup(BaseModel):
     retall_api_key: Optional[str] = None
 
 class UserLogin(BaseModel):
-    email: str
+    email: EmailStr
     password: str
 
 class UpdateUser(BaseModel):
@@ -188,11 +188,6 @@ class Tool(BaseModel):
     type: str
     name: str
     description: str
-    transfer_destination: Optional[Dict[str, Any]] = None
-    transfer_option: Optional[Dict[str, Any]] = None
-    cal_api_key: Optional[str] = None
-    event_type_id: Optional[int] = None
-    timezone: Optional[str] = None
 
 class StateEdge(BaseModel):
     destination_state_name: str
@@ -216,7 +211,7 @@ class KnowledgeFileOut(BaseModel):
     uploaded_at: datetime
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class StartAgentRequest(BaseModel):
     room: str
@@ -244,27 +239,21 @@ class PBXLLMCreate(BaseModel):
     knowledge_base_ids: Optional[List[str]] = None
 
 class PBXLLMOut(BaseModel):
-    id: str
     workspace_id: int
     version: int
-    model: Optional[str] = None
-    s2s_model: Optional[str] = None
+    model: str
+    s2s_model: str
     model_temperature: float
     model_high_priority: bool
     tool_call_strict_mode: bool
-    general_prompt: Optional[str] = None
-    general_tools: Optional[List[Dict[str, Any]]] = None
-    states: Optional[List[Dict[str, Any]]] = None
-    starting_state: Optional[str] = None
-    begin_message: Optional[str] = None
-    default_dynamic_variables: Optional[Dict[str, str]] = None
-    knowledge_base_ids: Optional[List[str]] = None
-    is_published: bool
-    last_modification_timestamp: int
+    general_prompt: str
+    general_tools: List[Tool]
+    begin_message: str
+    default_dynamic_variables: Dict[str, Any]
+    knowledge_base_ids: List[int]
 
     class Config:
-        from_attributes = True  
-        validate_by_name = True  
+        from_attributes = True
 
 #  Chat room -----------------------------------------------
 
@@ -337,11 +326,14 @@ class VoiceCreate(VoiceBase):
 class VoiceOut(BaseModel):
     voice_id: str
     voice_name: str
-    provider: Literal["elevenlabs", "openai", "deepgram"]
-    gender: Literal["male", "female"]
-    accent: Optional[str] = None
-    age: Optional[str] = None
-    preview_audio_url: Optional[str] = None
+    provider: str
+    gender: str
+    accent: str
+    age: str
+    preview_audio_url: str
+
+    class Config:
+        from_attributes = True
     
 
 class VoiceListResponse(BaseModel):
@@ -376,4 +368,4 @@ class PhoneNumberOut(BaseModel):
     last_modification_timestamp: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True
