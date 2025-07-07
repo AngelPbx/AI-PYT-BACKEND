@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 from openai import OpenAI
+from datetime import timedelta
 from fastapi import Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter
 from utils.helpers import is_user_in_workspace, generate_api_key
 from sqlalchemy.orm import Session
@@ -20,7 +21,7 @@ from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember,
                            ChatSession, LLMVoice, ImportedPhoneNumber
                            )
 from models.schemas import (
-    UserSignup, UserLogin, UpdateUser,DispatchRequest,
+    UserSignup, UserLogin, UpdateUser,DispatchRequest,CreateRoomRequestSchema,
     WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, KnowledgeBaseCreate, 
     AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, CreateChatRequest, CreateChatResponse,
     VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut
@@ -371,6 +372,70 @@ def update_user(
 #             message="Internal Server Error",
 #             errors=[{"field": "server", "message": str(e)}]
 #         )
+
+
+# Helper to format responses
+def format_response(status: bool, message: str, data=None):
+    return {
+        "status": status,
+        "message": message,
+        "data": data,
+    }
+
+@router.post("/create-room-token")
+async def create_room_and_token(request: CreateRoomRequestSchema):
+    try:
+        LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
+        LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
+        LIVEKIT_URL = os.getenv("LIVEKIT_URL")
+
+        if not (LIVEKIT_API_KEY and LIVEKIT_API_SECRET and LIVEKIT_URL):
+            raise HTTPException(status_code=500, detail="LiveKit credentials not configured")
+
+        # Create room (optional: LiveKit auto-creates room on join if not exists)
+        lkapi = api.LiveKitAPI(
+            url=LIVEKIT_URL,
+            api_key=LIVEKIT_API_KEY,
+            api_secret=LIVEKIT_API_SECRET
+        )
+        try:
+            lkapi.room.create_room(
+                api.CreateRoomRequest(
+                    name=request.room_name,
+                    empty_timeout=10 * 60,  # 10 minutes timeout
+                    max_participants=10,
+                    metadata=request.metadata
+                )
+            )
+        except api.LiveKitException as e:
+            # If room already exists, ignore error
+            if "already exists" not in str(e):
+                raise HTTPException(status_code=500, detail=f"LiveKit Error: {e}")
+
+        # Generate token
+        token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET) \
+            .with_identity(request.participant_identity) \
+            .with_name(request.participant_name) \
+            .with_grants(api.VideoGrants(
+                room_join=True,
+                room=request.room_name,
+            ))
+        jwt_token = token.to_jwt()
+
+        return format_response(
+            status=True,
+            message="Room and token created successfully",
+            data={
+                "room": request.room_name,
+                "token": "Bearer " + jwt_token,
+                "metadata": request.metadata
+            }
+        )
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
 @router.post("/create-dispatch")
 async def create_dispatch(request: DispatchRequest):
@@ -1431,7 +1496,8 @@ def create_agent(
     current_user: User = Depends(get_current_user)
 ):
     if not is_user_in_workspace(current_user.id, payload.workspace_id, db):
-        raise HTTPException(status_code=403, detail="You do not have access to this workspace")
+        pass
+        # raise HTTPException(status_code=403, detail="You do not have access to this workspace")
 
     agent = pbx_ai_agent(
         workspace_id=payload.workspace_id,

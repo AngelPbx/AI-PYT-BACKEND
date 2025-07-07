@@ -42,6 +42,11 @@ class DispatchRequest(BaseModel):
     agent_name: str
     metadata: dict
     
+class CreateRoomRequestSchema(BaseModel):
+    room_name: str
+    participant_identity: str
+    metadata: dict
+    
 class KnowledgeBaseCreate(BaseModel):
     name: str
     workspace_id: int
