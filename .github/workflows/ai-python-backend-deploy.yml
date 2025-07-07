@@ -1,0 +1,66 @@
+name: PythonDeploy
+
+on:
+  push:
+    branches:
+      - dev  # Ensure this matches your actual branch name
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      # Remove the checkout step if not needed
+      # - name: Checkout code
+      #   uses: actions/checkout@v2
+      #   with:
+      #     fetch-depth: 0
+
+      - name: Set up SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: |
+            ${{ secrets.SSH_PRIVATE_KEY }}
+
+
+      - name: Add GitHub to known_hosts
+        run: |
+            ssh-keyscan github.com >> ~/.ssh/known_hosts
+
+      - name: SSH into Server and Pull
+        run: |
+          
+          ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'EOF'
+           #set -e  # Exit immediately if a command exits with a non-zero status
+           # set -x  # Uncomment for debugging purposes
+
+            echo "Navigating to deployment directory: ${{ secrets.DEPLOY_PATH }}"
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            echo "Configuring Git to trust this repository globally."
+            git config --global --add safe.directory "$PWD"
+
+            # Check if the directory is a Git repository
+            if [ -d ".git" ]; then
+                echo "Git repository found. Checking out Production branch and pulling latest changes."
+            
+                # Ensure we are on the correct branch
+                git checkout dev
+                git pull origin dev
+
+            else
+                echo "Git repository not found. Cloning repository."
+            
+                # Clone only the Production branch
+                 git clone --single-branch --branch dev https://github.com/AngelPbx/AI-PYT-BACKEND.git .
+            fi
+
+            echo "Listing deployment directory contents:"
+            ls -la
+
+            pm2 restart ai-backend-python
+
+           echo "Deployment completed successfully."
+           echo "Exiting with status 0."
+           exit 0
+          EOF
