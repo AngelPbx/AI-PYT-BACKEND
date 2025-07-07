@@ -42,7 +42,7 @@ jobs:
 
             # Check if the directory is a Git repository
             if [ -d ".git" ]; then
-                echo "Git repository found. Checking out Production branch and pulling latest changes."
+                echo "Git repository found. Checking out dev branch and pulling latest changes."
             
                 # Ensure we are on the correct branch
                 git checkout dev
