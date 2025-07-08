@@ -1610,11 +1610,14 @@ def create_agent(
 #     # print(db.query(pbx_ai_agent).all())
 #     return agents
 
-@router.get("/all-agents")
+@router.get("/all-agents/{workspace_id}")
 def list_my_agents(
+    workspace_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    if not is_user_in_workspace(current_user.id, workspace_id, db):
+        raise HTTPException(status_code=403, detail="You do not have access to this workspace")
     try:
         # Get all workspace IDs the user is a member of
         workspace_ids = db.query(WorkspaceMember.workspace_id).filter(
