@@ -24,7 +24,7 @@ from models.schemas import (
     UserSignup, UserLogin, UpdateUser,DispatchRequest,CreateRoomRequestSchema,
     WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, KnowledgeBaseCreate, 
     AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, CreateChatRequest, CreateChatResponse,
-    VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut
+    VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut, APIResponse
 )
 from utils.helpers import (
     format_response, validate_email,
@@ -1851,7 +1851,63 @@ def get_voice(
     return voice
 
 
-@router.get("/all-voices", response_model=List[VoiceOut])
+# @router.get("/all-voices", response_model=List[VoiceOut])
+# def list_voices(
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db)
+# ):
+#     try:
+#         voices_data = [
+#             {
+#                 "voice_id": "openai-shimmer",
+#                 "voice_name": "Shimmer",
+#                 "provider": "elevenlabs",
+#                 "gender": "female",
+#                 "accent": "Neutral",
+#                 "age": "Adult",
+#                 "preview_audio_url": "https://example.com/previews/shimmer.mp3"
+#             },
+#             {
+#                 "voice_id": "elevn-echo",
+#                 "voice_name": "Echo",
+#                 "provider": "elevenlabs",
+#                 "gender": "male",
+#                 "accent": "British",
+#                 "age": "Middle-aged",
+#                 "preview_audio_url": "https://example.com/previews/echo.mp3"
+#             },
+#             {
+#                 "voice_id": "elevn-nova",
+#                 "voice_name": "Nova",
+#                 "provider": "elevenlabs",
+#                 "gender": "female",
+#                 "accent": "American",
+#                 "age": "Young Adult",
+#                 "preview_audio_url": "https://example.com/previews/nova.mp3"
+#             },
+#             {
+#                 "voice_id": "elevn-pulse",
+#                 "voice_name": "Pulse",
+#                 "provider": "elevenlabs",
+#                 "gender": "male",
+#                 "accent": "Australian",
+#                 "age": "Adult",
+#                 "preview_audio_url": "https://example.com/previews/pulse.mp3"
+#             }
+#         ]
+#         # Convert to VoiceOut objects and return as a list
+#         return [VoiceOut.model_validate(voice) for voice in voices_data]
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=500,
+#             detail={
+#                 "status": False,
+#                 "message": "Internal Server Error",
+#                 "errors": [{"field": "server", "message": str(e)}]
+#             }
+#         )
+
+@router.get("/all-voices", response_model=APIResponse)
 def list_voices(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -1895,18 +1951,47 @@ def list_voices(
                 "preview_audio_url": "https://example.com/previews/pulse.mp3"
             }
         ]
-        # Convert to VoiceOut objects and return as a list
-        return [VoiceOut.model_validate(voice) for voice in voices_data]
+        
+        # Validate and convert to VoiceOut objects
+        try:
+            voices = [VoiceOut.model_validate(voice) for voice in voices_data]
+        except ValueError as validation_error:
+            return APIResponse(
+                status=False,
+                message="Validation error",
+                data=None,
+                errors=[
+                    {
+                        "field": "voice_data",
+                        "message": str(validation_error)
+                    }
+                ]
+            )
+        
+        # Return successful response
+        return APIResponse(
+            status=True,
+            message="Voices fetched successfully",
+            data=voices,
+            errors=[]
+        )
+        
     except Exception as e:
         raise HTTPException(
-            status_code=500,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "status": False,
                 "message": "Internal Server Error",
-                "errors": [{"field": "server", "message": str(e)}]
+                "data": None,
+                "errors": [
+                    {
+                        "field": "server",
+                        "message": str(e)
+                    }
+                ]
             }
         )
-    
+
 #import phone
 @router.post("/import-phone-number", response_model=PhoneNumberOut, status_code=201)
 def import_phone_number(

@@ -372,3 +372,9 @@ class PhoneNumberCreate(BaseModel):
     outbound_agent_version: Optional[int] = None
     nickname: Optional[str] = None
     inbound_webhook_url: Optional[str] = None
+    
+class APIResponse(BaseModel):
+    status: bool
+    message: str
+    data: Optional[List[VoiceOut]] = None
+    errors: List[dict] = []
