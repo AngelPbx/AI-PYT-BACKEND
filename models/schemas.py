@@ -192,14 +192,15 @@ class AgentCreate(BaseModel):
     response_engine: Optional[ResponseEngine]
 
 class AgentOut(AgentCreate):
-    agent_id: str = Field(..., alias="id")  # ← maps DB's `id` to `agent_id`
+    agent_id: str = Field(..., alias="id")
     version: Optional[int] = 0
     is_published: Optional[bool]
     last_modification_timestamp: Optional[int]
 
-    class Config:
-        from_attributes = True  # for Pydantic v2
-        validate_by_name = True
+    model_config = {
+        "from_attributes": True,  # ✅ Pydantic v2 replaces orm_mode
+        "populate_by_name": True  # ✅ alias can populate by original name
+    }
 
 
 # PBX LLM SCHEMAS----------------------------------------------
@@ -365,3 +366,65 @@ class APIResponse(BaseModel):
     message: str
     data: Optional[List[VoiceOut]] = None
     errors: List[dict] = []
+
+# -----------------------------web call--------------------------------
+class WebCallCreateRequest(BaseModel):
+    agent_id: str
+    agent_version: Optional[int] = None
+    metadata: Optional[Dict[str, Any]] = None
+    retell_llm_dynamic_variables: Optional[Dict[str, str]] = None
+
+class LatencyMetrics(BaseModel):
+    p50: int
+    p90: int
+    p95: int
+    p99: int
+    max: int
+    min: int
+    num: int
+    values: List[int]
+
+
+class CallAnalysis(BaseModel):
+    call_summary: str
+    in_voicemail: bool
+    user_sentiment: str
+    call_successful: bool
+    custom_analysis_data: Dict[str, Any]
+
+
+class CallCost(BaseModel):
+    product_costs: List[Dict[str, Any]]
+    total_duration_seconds: int
+    total_duration_unit_price: int
+    total_one_time_price: int
+    combined_cost: int
+
+
+class WebCallResponse(BaseModel):
+    call_type: str
+    access_token: str
+    call_id: str
+    agent_id: str
+    agent_version: Optional[int]
+    call_status: str
+    call_metadata: Optional[Dict[str, Any]]
+    retell_llm_dynamic_variables: Optional[Dict[str, str]]
+    collected_dynamic_variables: Optional[Dict[str, Any]]
+    custom_sip_headers: Optional[Dict[str, str]]
+    opt_out_sensitive_data_storage: bool
+    opt_in_signed_url: bool
+    start_timestamp: Optional[int]
+    end_timestamp: Optional[int]
+    duration_ms: Optional[int]
+    transcript: Optional[str]
+    transcript_object: Optional[List[Dict[str, Any]]]
+    transcript_with_tool_calls: Optional[List[Dict[str, Any]]]
+    recording_url: Optional[str]
+    public_log_url: Optional[str]
+    knowledge_base_retrieved_contents_url: Optional[str]
+    latency: Optional[Dict[str, Any]]
+    disconnection_reason: Optional[str]
+    call_analysis: Optional[CallAnalysis]
+    call_cost: Optional[CallCost]
+    llm_token_usage: Optional[Dict[str, Any]]

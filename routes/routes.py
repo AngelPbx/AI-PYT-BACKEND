@@ -9,6 +9,7 @@ from fastapi import Depends, Query, HTTPException, Form, UploadFile, File, Body,
 from utils.helpers import is_user_in_workspace, generate_api_key
 from sqlalchemy.orm import Session
 import uuid 
+from fastapi.responses import JSONResponse
 import requests
 from bs4 import BeautifulSoup
 import time,json
@@ -18,10 +19,10 @@ from sqlalchemy.orm import sessionmaker, Session
 from db.database import get_db, get_current_user
 from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, 
                            KnowledgeFile, APIKey, FileStatus, SourceStatus, pbx_ai_agent, PBXLLM, 
-                           ChatSession, LLMVoice, ImportedPhoneNumber
+                           ChatSession, LLMVoice, ImportedPhoneNumber,WebCall
                            )
 from models.schemas import (
-    UserSignup, UserLogin, UpdateUser,DispatchRequest,CreateRoomRequestSchema,
+    UserSignup, UserLogin, UpdateUser,DispatchRequest,CreateRoomRequestSchema,WebCallResponse,WebCallCreateRequest,
     WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, KnowledgeBaseCreate, 
     AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, CreateChatRequest, CreateChatResponse,
     VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut, APIResponse
@@ -1703,23 +1704,49 @@ def list_my_agents(
         )
 
 
-@router.get("/agents/{agent_id}", response_model=AgentOut)
+@router.get("/agents/{agent_id}", response_model=APIResponse)
 def get_agent(
     agent_id: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Fetch the agent by ID
     agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == agent_id).first()
 
     if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": False,
+                "message": "Agent not found",
+                "data": None,
+                "errors": [{"field": "agent_id", "message": "No agent found with this ID"}]
+            }
+        )
 
-    # Optional: Check workspace access if needed
+    # Optional: Check workspace access
     if not is_user_in_workspace(current_user.id, agent.workspace_id, db):
-        raise HTTPException(status_code=403, detail="Access denied to this workspace")
+        return JSONResponse(
+            status_code=403,
+            content={
+                "status": False,
+                "message": "Access denied to this workspace",
+                "data": None,
+                "errors": [{"field": "workspace", "message": "You don't have access to this workspace"}]
+            }
+        )
 
-    return agent
+    # Return agent data in desired format
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": True,
+            "message": "Agent retrieved successfully",
+            "data": AgentOut.model_validate(agent).model_dump(),
+            "errors": None
+        }
+    )
+
+
 
 
 # PBX LLM APIs--------------------------------------------------
@@ -2249,3 +2276,64 @@ def list_phone_numbers(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
+    
+# -----------------web call api--------------------------------------------------
+
+@router.post("/call/create-web-call", response_model=WebCallResponse)
+def create_web_call(
+    payload: WebCallCreateRequest,
+    db: Session = Depends(get_db)
+):
+    # Generate unique call_id and access_token
+    call_id = uuid.uuid4().hex
+    access_token = uuid.uuid4().hex
+
+    # Create WebCall DB record
+    new_web_call = WebCall(
+        call_type="web_call",
+        access_token=access_token,
+        call_id=call_id,
+        agent_id=payload.agent_id,
+        agent_version=payload.agent_version or 1,
+        call_status="registered",
+        call_metadata=payload.metadata or {},
+        retell_llm_dynamic_variables=payload.retell_llm_dynamic_variables or {},
+        created_at=int(time.time() * 1000),
+        updated_at=int(time.time() * 1000)
+    )
+
+    db.add(new_web_call)
+    db.commit()
+    db.refresh(new_web_call)
+
+    # Build response
+    response = WebCallResponse(
+        call_type="web_call",
+        access_token=access_token,
+        call_id=call_id,
+        agent_id=payload.agent_id,
+        agent_version=new_web_call.agent_version,
+        call_status="registered",
+        call_metadata=new_web_call.metadata,
+        retell_llm_dynamic_variables=new_web_call.retell_llm_dynamic_variables,
+        collected_dynamic_variables={},
+        custom_sip_headers={},
+        opt_out_sensitive_data_storage=False,
+        opt_in_signed_url=True,
+        start_timestamp=None,
+        end_timestamp=None,
+        duration_ms=None,
+        transcript=None,
+        transcript_object=[],
+        transcript_with_tool_calls=[],
+        recording_url=None,
+        public_log_url=None,
+        knowledge_base_retrieved_contents_url=None,
+        latency={},
+        disconnection_reason=None,
+        call_analysis=None,
+        call_cost=None,
+        llm_token_usage=None
+    )
+
+    return response
