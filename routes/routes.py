@@ -408,26 +408,14 @@ async def create_room_and_token(
         )
         pbxllm = (
             db.query(PBXLLM)
-            .filter(PBXLLM.workspace_id == agent.workspace_id)
+            .filter(PBXLLM.workspace_id.in_(workspace_ids))
             .first()
         )
-        print(f"Agent found: {agent is not None}, PBXLLM found: {pbxllm is not None}")
+        
 
         if not agent and pbxllm:
             raise HTTPException(status_code=404, detail="No LLM configuration & Agent not found for this user")
         
-
-        # ✅ Print fetched agent data in console
-        print("Fetched Agent Data:")
-        # print({
-        #     "id": agent.id,
-        #     "name": agent.name,
-        #     "voice_id": agent.voice_id,
-        #     "voice_model": agent.voice_model,
-        #     "language": agent.language,
-        #     "response_engine": agent.response_engine,
-        #     "ambient_sound": agent.ambient_sound
-        # })
 
         # 🔥 Step 2: Create room (optional - LiveKit auto-creates)
         lkapi = api.LiveKitAPI(
@@ -1534,7 +1522,7 @@ __all__ = ['router']
 
 # Agent apis--------------------------------------------------
 
-@router.post("/agents", response_model=AgentOut)
+@router.post("/agents")
 def create_agent(
     payload: AgentCreate,
     db: Session = Depends(get_db),
@@ -1544,9 +1532,9 @@ def create_agent(
         pass
         # raise HTTPException(status_code=403, detail="You do not have access to this workspace")
 
-    agent = pbx_ai_agent(
+    new_agent = pbx_ai_agent(
         workspace_id=payload.workspace_id,
-        name=payload.name,
+        name=payload.agent_name,
         voice_id=payload.voice_id,
         voice_model=payload.voice_model,
         fallback_voice_ids=payload.fallback_voice_ids,
@@ -1592,24 +1580,49 @@ def create_agent(
 
 
 
-    db.add(agent)
+    db.add(new_agent)
     db.commit()
-    db.refresh(agent)
-    return agent
+    db.refresh(new_agent)
 
+    response_data = {
+        "agent_id": f"{new_agent.id}",
+        "last_modification_timestamp": new_agent.last_modification_timestamp,
+        "agent_name": new_agent.name,
+        "response_engine": new_agent.response_engine,
+        "language": new_agent.language,
+        "opt_out_sensitive_data_storage": new_agent.opt_out_sensitive_data_storage,
+        "opt_in_signed_url": new_agent.opt_in_signed_url,
+        "end_call_after_silence_ms": new_agent.end_call_after_silence_ms,
+        "version": new_agent.version,
+        "is_published": new_agent.is_published,
+        "post_call_analysis_model": new_agent.post_call_analysis_model,
+        "voice_id": new_agent.voice_id,
+        "voice_model": new_agent.voice_model,
+        "voice_temperature": new_agent.voice_temperature,
+        "voice_speed": new_agent.voice_speed,
+        "volume": new_agent.volume,
+        "enable_backchannel": new_agent.enable_backchannel,
+        "backchannel_frequency": new_agent.backchannel_frequency,
+        "reminder_trigger_ms": new_agent.reminder_trigger_ms,
+        "reminder_max_count": new_agent.reminder_max_count,
+        "max_call_duration_ms": new_agent.max_call_duration_ms,
+        "interruption_sensitivity": new_agent.interruption_sensitivity,
+        "ambient_sound_volume": new_agent.ambient_sound_volume,
+        "responsiveness": new_agent.responsiveness,
+        "normalize_for_speech": new_agent.normalize_for_speech,
+        "begin_message_delay_ms": new_agent.begin_message_delay_ms,
+        "ring_duration_ms": new_agent.ring_duration_ms,
+        "stt_mode": new_agent.stt_mode,
+        "allow_user_dtmf": new_agent.allow_user_dtmf,
+        "user_dtmf_options": new_agent.user_dtmf_options,
+        "denoising_mode": new_agent.denoising_mode
+    }
 
-# @router.get("/all-agents/{workspace_id}", response_model=List[AgentOut])
-# def list_agents(
-#     workspace_id: int,
-#     db: Session = Depends(get_db),
-#     current_user: User = Depends(get_current_user)
-# ):
-#     if not is_user_in_workspace(current_user.id, workspace_id, db):
-#         raise HTTPException(status_code=403, detail="You do not have access to this workspace")
+    return {
+        "status": True,
+        "data": response_data
+    }
 
-#     agents = db.query(pbx_ai_agent).filter(pbx_ai_agent.workspace_id == workspace_id).all()
-#     # print(db.query(pbx_ai_agent).all())
-#     return agents
 
 @router.get("/all-agents/{workspace_id}")
 def list_my_agents(
@@ -1746,9 +1759,11 @@ def create_pbx_llm(
     db.add(llm)
     db.commit()
     db.refresh(llm)
+    return PBXLLMOut(
+        status=True,
+        llm_id=f"{llm.id}"
+    )
    
-    return PBXLLMOut.model_validate(llm)
-
 @router.get("/pbx-llms")
 def get_pbx_llm(
     current_user: User = Depends(get_current_user),

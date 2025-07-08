@@ -153,7 +153,7 @@ class UserDTMFOptions(BaseModel):
 
 class AgentCreate(BaseModel):
     workspace_id: int
-    name: Optional[str] = None
+    agent_name: Optional[str] = None
     version: Optional[int] = 0
     voice_id: str
     voice_model: Optional[str] = None
@@ -259,21 +259,8 @@ class PBXLLMCreate(BaseModel):
     knowledge_base_ids: Optional[List[str]] = None
 
 class PBXLLMOut(BaseModel):
-    workspace_id: int
-    version: int
-    model: str
-    s2s_model: str
-    model_temperature: float
-    model_high_priority: bool
-    tool_call_strict_mode: bool
-    general_prompt: str
-    general_tools: List[Tool]
-    begin_message: str
-    default_dynamic_variables: Dict[str, Any]
-    knowledge_base_ids: List[int]
-
-    class Config:
-        from_attributes = True
+    status: bool
+    llm_id: str
 
 #  Chat room -----------------------------------------------
 

@@ -118,14 +118,7 @@ class APIKey(Base):
 # Agent Models
 class pbx_ai_agent(Base):
     __tablename__ = "pbx_ai_agent"
-    
-    # id = Column(Integer, primary_key=True)
-    # name = Column(String)
-    # workspace_id = Column(Integer, ForeignKey("workspaces.id"))
-    # description = Column(String, nullable=True)
-    # created_at = Column(DateTime)
-    # updated_at = Column(DateTime)
-
+  
     id = Column(String, primary_key=True, index=True, default=lambda: f"{uuid.uuid4().hex[:16]}")
     version = Column(Integer, default=0)
     workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=False)
