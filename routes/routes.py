@@ -1572,7 +1572,7 @@ def create_agent(
         allow_user_dtmf=payload.allow_user_dtmf,
         user_dtmf_options=payload.user_dtmf_options.model_dump() if payload.user_dtmf_options else None,
         denoising_mode=payload.denoising_mode,
-        response_engine=payload.response_engine.model_dump(),
+        response_engine=payload.response_engine.model_dump() if payload.response_engine else None,
         version=payload.version,
         last_modification_timestamp=int(time.time() * 1000),
     )

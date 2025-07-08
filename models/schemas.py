@@ -96,7 +96,7 @@ class WorkspaceSettingsUpdate(BaseModel):
 # Agent schemas----------------------------------------------
 
 class ResponseEngine(BaseModel):
-    type: Literal["pbx-llm", "custom-llm", "conversation-flow"]
+    type: Optional[Literal["pbx-llm", "custom-llm", "conversation-flow"]] = None
     llm_id: Optional[str] = None
     version: Optional[int] = None
     llm_websocket_url: Optional[str] = None
@@ -147,9 +147,9 @@ class PostCallAnalysis(BaseModel):
     examples: List[str]
 
 class UserDTMFOptions(BaseModel):
-    digit_limit: int
-    termination_key: str
-    timeout_ms: int
+    digit_limit: Optional[int] = None
+    termination_key: Optional[str] = None
+    timeout_ms: Optional[int] = None
 
 class AgentCreate(BaseModel):
     workspace_id: int
@@ -189,7 +189,7 @@ class AgentCreate(BaseModel):
     allow_user_dtmf: Optional[bool] = True
     user_dtmf_options: Optional[UserDTMFOptions] = None
     denoising_mode: Optional[str] = "noise-cancellation"
-    response_engine: ResponseEngine
+    response_engine: Optional[ResponseEngine]
 
 class AgentOut(AgentCreate):
     agent_id: str = Field(..., alias="id")  # ← maps DB's `id` to `agent_id`
