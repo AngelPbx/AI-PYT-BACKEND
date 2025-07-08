@@ -375,12 +375,6 @@ def update_user(
 
 
 # Helper to format responses
-def format_response(status: bool, message: str, data=None):
-    return {
-        "status": status,
-        "message": message,
-        "data": data,
-    }
 
 @router.post("/create-room-token")
 async def create_room_and_token(
