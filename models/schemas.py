@@ -43,9 +43,11 @@ class DispatchRequest(BaseModel):
     metadata: dict
     
 class CreateRoomRequestSchema(BaseModel):
+    agent_name: str
     room_name: str
     participant_identity: str
-    metadata: dict
+    participant_name: str
+    metadata: Optional[Dict[str, Any]] = None
     
 class KnowledgeBaseCreate(BaseModel):
     name: str

@@ -383,7 +383,11 @@ def format_response(status: bool, message: str, data=None):
     }
 
 @router.post("/create-room-token")
-async def create_room_and_token(request: CreateRoomRequestSchema):
+async def create_room_and_token(
+    request: CreateRoomRequestSchema,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)  # get the logged-in user
+):
     try:
         LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
         LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
@@ -392,7 +396,39 @@ async def create_room_and_token(request: CreateRoomRequestSchema):
         if not (LIVEKIT_API_KEY and LIVEKIT_API_SECRET and LIVEKIT_URL):
             raise HTTPException(status_code=500, detail="LiveKit credentials not configured")
 
-        # Create room (optional: LiveKit auto-creates room on join if not exists)
+        workspace_ids = [
+            membership.workspace_id for membership in current_user.memberships
+        ]
+
+        if not workspace_ids:
+            raise HTTPException(status_code=403, detail="User is not a member of any workspace")
+
+        # 🔥 Step 2: Search for agent in user's workspaces
+        agent = (
+            db.query(pbx_ai_agent)
+            .filter(
+                pbx_ai_agent.name == request.agent_name,
+                pbx_ai_agent.workspace_id.in_(workspace_ids)
+            )
+            .first()
+        )
+
+        if not agent:
+            raise HTTPException(status_code=404, detail="Agent not found for this user")
+
+        # ✅ Print fetched agent data in console
+        print("Fetched Agent Data:")
+        print({
+            "id": agent.id,
+            "name": agent.name,
+            "voice_id": agent.voice_id,
+            "voice_model": agent.voice_model,
+            "language": agent.language,
+            "response_engine": agent.response_engine,
+            "ambient_sound": agent.ambient_sound
+        })
+
+        # 🔥 Step 2: Create room (optional - LiveKit auto-creates)
         lkapi = api.LiveKitAPI(
             url=LIVEKIT_URL,
             api_key=LIVEKIT_API_KEY,
@@ -404,15 +440,15 @@ async def create_room_and_token(request: CreateRoomRequestSchema):
                     name=request.room_name,
                     empty_timeout=10 * 60,  # 10 minutes timeout
                     max_participants=10,
-                    metadata=request.metadata
+                    metadata=json.dumps(request.metadata) if request.metadata else None
                 )
             )
-        except api.LiveKitException as e:
-            # If room already exists, ignore error
+            print(f"Room '{request.room_name}' created successfully.")
+        except Exception as e:
             if "already exists" not in str(e):
                 raise HTTPException(status_code=500, detail=f"LiveKit Error: {e}")
 
-        # Generate token
+        # 🔥 Step 3: Generate token
         token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET) \
             .with_identity(request.participant_identity) \
             .with_name(request.participant_name) \
@@ -421,16 +457,24 @@ async def create_room_and_token(request: CreateRoomRequestSchema):
                 room=request.room_name,
             ))
         jwt_token = token.to_jwt()
+        return jwt_token
 
-        return format_response(
-            status=True,
-            message="Room and token created successfully",
-            data={
-                "room": request.room_name,
-                "token": "Bearer " + jwt_token,
-                "metadata": request.metadata
-            }
-        )
+        # return format_response(
+        #     status=True,
+        #     message="Room and token created successfully",
+        #     data={
+        #         "room": request.room_name,
+        #         "token": "Bearer " + jwt_token,
+        #         "metadata": request.metadata,
+        #         "agent": {
+        #             "id": agent.id,
+        #             "name": agent.name,
+        #             "voice_model": agent.voice_model,
+        #             "language": agent.language,
+        #             "response_engine": agent.response_engine
+        #         }
+        #     }
+        # )
 
     except HTTPException as he:
         raise he
@@ -1582,17 +1626,51 @@ def list_my_agents(
             pbx_ai_agent.workspace_id.in_(workspace_ids)
         ).all()
 
-        # Optionally, serialize if not using response_model directly
-        agent_list = [
-            {
-                "id": agent.id,
-                "name": agent.name,
-                "workspace_id": agent.workspace_id,
-                "description": agent.description,
-                "created_at": agent.created_at.isoformat() if agent.created_at else None,
-                "updated_at": agent.updated_at.isoformat() if agent.updated_at else None
-            } for agent in agents
-        ]
+        # Serialize agents into your desired format
+        agent_list = []
+        for agent in agents:
+            agent_list.append({
+                "agent_id": agent.id,
+                "version": agent.version,
+                "is_published": agent.is_published,
+                "response_engine": agent.response_engine or {},
+                "agent_name": agent.name,
+                "voice_id": agent.voice_id,
+                "voice_model": agent.voice_model,
+                "fallback_voice_ids": agent.fallback_voice_ids or [],
+                "voice_temperature": agent.voice_temperature,
+                "voice_speed": agent.voice_speed,
+                "volume": agent.volume,
+                "responsiveness": agent.responsiveness,
+                "interruption_sensitivity": agent.interruption_sensitivity,
+                "enable_backchannel": agent.enable_backchannel,
+                "backchannel_frequency": agent.backchannel_frequency,
+                "backchannel_words": agent.backchannel_words or [],
+                "reminder_trigger_ms": agent.reminder_trigger_ms,
+                "reminder_max_count": agent.reminder_max_count,
+                "ambient_sound": agent.ambient_sound,
+                "ambient_sound_volume": agent.ambient_sound_volume,
+                "language": agent.language,
+                "webhook_url": agent.webhook_url,
+                "boosted_keywords": agent.boosted_keywords or [],
+                "opt_out_sensitive_data_storage": agent.opt_out_sensitive_data_storage,
+                "opt_in_signed_url": agent.opt_in_signed_url,
+                "pronunciation_dictionary": agent.pronunciation_dictionary or [],
+                "normalize_for_speech": agent.normalize_for_speech,
+                "end_call_after_silence_ms": agent.end_call_after_silence_ms,
+                "max_call_duration_ms": agent.max_call_duration_ms,
+                "voicemail_option": agent.voicemail_option or {},
+                "post_call_analysis_data": agent.post_call_analysis_data or [],
+                "post_call_analysis_model": agent.post_call_analysis_model,
+                "begin_message_delay_ms": agent.begin_message_delay_ms,
+                "ring_duration_ms": agent.ring_duration_ms,
+                "stt_mode": agent.stt_mode,
+                "vocab_specialization": agent.vocab_specialization,
+                "allow_user_dtmf": agent.allow_user_dtmf,
+                "user_dtmf_options": agent.user_dtmf_options or {},
+                "denoising_mode": agent.denoising_mode,
+                "last_modification_timestamp": agent.last_modification_timestamp
+            })
 
         return format_response(
             status=True,
@@ -1604,9 +1682,10 @@ def list_my_agents(
         db.rollback()
         return format_response(
             status=False,
-            message="Internal Server Error",
-            errors=[{"field": "server", "message": str(e)}]
+            message=f"Internal Server Error: {str(e)}",
+            data=None
         )
+
 
 @router.get("/agents/{agent_id}", response_model=AgentOut)
 def get_agent(
