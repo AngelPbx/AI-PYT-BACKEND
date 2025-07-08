@@ -1529,8 +1529,7 @@ def create_agent(
     current_user: User = Depends(get_current_user)
 ):
     if not is_user_in_workspace(current_user.id, payload.workspace_id, db):
-        pass
-        # raise HTTPException(status_code=403, detail="You do not have access to this workspace")
+        raise HTTPException(status_code=403, detail="You do not have access to this workspace")
 
     new_agent = pbx_ai_agent(
         workspace_id=payload.workspace_id,
