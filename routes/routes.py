@@ -1739,38 +1739,50 @@ def create_pbx_llm(
    
     return PBXLLMOut.model_validate(llm)
 
-@router.get("/pbx-llms", response_model=PBXLLMOut)
+@router.get("/pbx-llms")
 def get_pbx_llm(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)  # Kept for consistency, though not used
+    db: Session = Depends(get_db)
 ):
-    # Hardcoded data
-    llm_data = {
-        "workspace_id": 1,
-        "version": 1,
-        "model": "gpt-4o",
-        "s2s_model": "whisper-large-v3",
-        "model_temperature": 0.7,
-        "model_high_priority": True,
-        "tool_call_strict_mode": False,
-        "general_prompt": "## Identity\nYou are Kate from the appointment department at Webvio Health calling Cindy over the phone to prepare for the annual checkup coming up. You are a pleasant and friendly receptionist caring deeply for the user. You don't provide medical advice but would use the medical knowledge to understand user responses.\n\n## Style Guardrails\nBe Concise: Respond succinctly, addressing one topic at most.\nEmbrace Variety: Use diverse language and rephrasing to enhance clarity without repeating content.\nBe Conversational: Use everyday language, making the chat feel like talking to a friend.\nBe Proactive: Lead the conversation, often wrapping up with a question or next-step suggestion.\nAvoid multiple questions in a single response.\nGet clarity: If the user only partially answers a question, or if the answer is unclear, keep asking to get clarity.\nUse a colloquial way of referring to the date (like Friday, January 14th, or Tuesday, January 12th, 2024 at 8am).\n\n## Response Guideline\nAdapt and Guess: Try to understand transcripts that may contain transcription errors. Avoid mentioning \"transcription error\" in the response.",
-        "general_tools": [
-            {
-                "type": "end_call",
-                "name": "end_call",
-                "description": "Hang up the call"
-            }
-        ],
-        "begin_message": "Connecting you with the assistant...",
-        "default_dynamic_variables": {
-            "company_name": "VoiceAI",
-            "timezone": "UTC+5:30"
-        },
-        "knowledge_base_ids": []
-    }
-    
-    # Validate and return the data using PBXLLMOut
-    return PBXLLMOut.model_validate(llm_data)
+    try:
+        # Hardcoded LLM configuration data
+        llm_data = {
+            "workspace_id": 1,
+            "version": 1,
+            "model": "gpt-4o",
+            "s2s_model": "whisper-large-v3",
+            "model_temperature": 0.7,
+            "model_high_priority": True,
+            "tool_call_strict_mode": False,
+            "general_prompt": "## Identity\nYou are Kate from the appointment department at Webvio Health calling Cindy over the phone to prepare for the annual checkup coming up. You are a pleasant and friendly receptionist caring deeply for the user. You don't provide medical advice but would use the medical knowledge to understand user responses.\n\n## Style Guardrails\nBe Concise: Respond succinctly, addressing one topic at most.\nEmbrace Variety: Use diverse language and rephrasing to enhance clarity without repeating content.\nBe Conversational: Use everyday language, making the chat feel like talking to a friend.\nBe Proactive: Lead the conversation, often wrapping up with a question or next-step suggestion.\nAvoid multiple questions in a single response.\nGet clarity: If the user only partially answers a question, or if the answer is unclear, keep asking to get clarity.\nUse a colloquial way of referring to the date (like Friday, January 14th, or Tuesday, January 12th, 2024 at 8am).\n\n## Response Guideline\nAdapt and Guess: Try to understand transcripts that may contain transcription errors. Avoid mentioning \"transcription error\" in the response.",
+            "general_tools": [
+                {
+                    "type": "end_call",
+                    "name": "end_call",
+                    "description": "Hang up the call"
+                }
+            ],
+            "begin_message": "Connecting you with the assistant...",
+            "default_dynamic_variables": {
+                "company_name": "VoiceAI",
+                "timezone": "UTC+5:30"
+            },
+            "knowledge_base_ids": []
+        }
+
+        return format_response(
+            status=True,
+            message="LLM configuration fetched successfully",
+            data=PBXLLMOut(**llm_data).dict()
+        )
+
+    except Exception as e:
+        return format_response(
+            status=False,
+            message="Failed to fetch LLM configuration",
+            errors=[{"field": "server", "message": str(e)}],
+            status_code=500
+        )
 
 
 @router.get("/all-pbx-llms/{workspace_id}", response_model=List[PBXLLMOut])
