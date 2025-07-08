@@ -708,9 +708,9 @@ def delete_workspace(
             errors=[{"field": "server", "message": str(e)}]
         )
 
-@router.post("/workspaces/{workspace_id}/knowledge-bases")
+@router.post("/workspaces/knowledge-bases")
 def create_knowledge_base(
-    workspace_id: int,
+    workspace_id: int = Form(...),
     source_type: str = Form(...),  # 'file', 'web_page', or 'text'
     name: str = Form(...),
     file: UploadFile = File(None),
