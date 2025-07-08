@@ -203,7 +203,28 @@ class AgentOut(AgentCreate):
         from_attributes = True  # for Pydantic v2
         validate_by_name = True
 
+class GetPBXLLMOut(BaseModel):
+    workspace_id: int
+    version: int
+    model: Optional[str]
+    s2s_model: Optional[str]
+    model_temperature: float
+    model_high_priority: bool
+    tool_call_strict_mode: bool
+    general_prompt: Optional[str]
+    general_tools: Optional[List[Dict[str, Any]]]
+    states: Optional[List[Dict[str, Any]]]
+    starting_state: Optional[str]
+    begin_message: Optional[str]
+    default_dynamic_variables: Optional[Dict[str, Any]]
+    knowledge_base_ids: Optional[List[int]]
+    is_published: bool
+    last_modification_timestamp: int
 
+    class Config:
+        orm_mode = True  # For Pydantic v1
+        from_attributes = True  # for Pydantic v2
+        validate_by_name = True
 # PBX LLM SCHEMAS----------------------------------------------
 
 class Tool(BaseModel):
@@ -223,10 +244,10 @@ class LLMState(BaseModel):
 
 class KnowledgeFileOut(BaseModel):
     id: int
-    # kb_id: str
-    # filename: str
-    # file_path: Optional[str]
-    # extract_data: Optional[str]
+    kb_id: str
+    filename: str
+    file_path: Optional[str]
+    extract_data: Optional[str]
     status: str
     source_type: str
     embedding: Optional[List[float]]
