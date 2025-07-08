@@ -406,21 +406,28 @@ async def create_room_and_token(
             )
             .first()
         )
+        pbxllm = (
+            db.query(PBXLLM)
+            .filter(PBXLLM.workspace_id == agent.workspace_id)
+            .first()
+        )
+        print(f"Agent found: {agent is not None}, PBXLLM found: {pbxllm is not None}")
 
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found for this user")
+        if not agent and pbxllm:
+            raise HTTPException(status_code=404, detail="No LLM configuration & Agent not found for this user")
+        
 
         # ✅ Print fetched agent data in console
         print("Fetched Agent Data:")
-        print({
-            "id": agent.id,
-            "name": agent.name,
-            "voice_id": agent.voice_id,
-            "voice_model": agent.voice_model,
-            "language": agent.language,
-            "response_engine": agent.response_engine,
-            "ambient_sound": agent.ambient_sound
-        })
+        # print({
+        #     "id": agent.id,
+        #     "name": agent.name,
+        #     "voice_id": agent.voice_id,
+        #     "voice_model": agent.voice_model,
+        #     "language": agent.language,
+        #     "response_engine": agent.response_engine,
+        #     "ambient_sound": agent.ambient_sound
+        # })
 
         # 🔥 Step 2: Create room (optional - LiveKit auto-creates)
         lkapi = api.LiveKitAPI(
