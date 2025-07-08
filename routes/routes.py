@@ -1711,7 +1711,7 @@ def get_agent(
     current_user: User = Depends(get_current_user)
 ):
     agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == agent_id).first()
-
+    print(f"Fetching agent with ID: {agent.name}")
     if not agent:
         return JSONResponse(
             status_code=404,
@@ -1741,8 +1741,7 @@ def get_agent(
         content={
             "status": True,
             "message": "Agent retrieved successfully",
-            "data": AgentOut.model_validate(agent).model_dump(),
-            "errors": None
+            "data": AgentOut.from_orm(agent).model_dump()           
         }
     )
 

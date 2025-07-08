@@ -193,14 +193,15 @@ class AgentCreate(BaseModel):
 
 class AgentOut(AgentCreate):
     agent_id: str = Field(..., alias="id")
+    agent_name: str = Field(..., alias="name")
     version: Optional[int] = 0
     is_published: Optional[bool]
     last_modification_timestamp: Optional[int]
 
-    model_config = {
-        "from_attributes": True,  # ✅ Pydantic v2 replaces orm_mode
-        "populate_by_name": True  # ✅ alias can populate by original name
-    }
+    class Config:
+        orm_mode = True  # For Pydantic v1
+        from_attributes = True  # for Pydantic v2
+        validate_by_name = True
 
 
 # PBX LLM SCHEMAS----------------------------------------------
