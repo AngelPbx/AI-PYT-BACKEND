@@ -1790,7 +1790,9 @@ def create_pbx_llm(
     )
    
 @router.get("/pbx-llm/{llm_id}")
-def get_pbx_llm(llm_id: str, db: Session = Depends(get_db)):
+def get_pbx_llm(llm_id: str, 
+                current_user: User = Depends(get_current_user),
+                db: Session = Depends(get_db)):
     # Fetch PBXLLM by id
     llm = db.query(PBXLLM).filter(PBXLLM.id == llm_id).first()
 
