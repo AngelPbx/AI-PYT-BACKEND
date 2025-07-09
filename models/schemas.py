@@ -204,6 +204,7 @@ class AgentOut(AgentCreate):
         validate_by_name = True
 
 class GetPBXLLMOut(BaseModel):
+    id: str
     workspace_id: int
     version: int
     model: Optional[str]

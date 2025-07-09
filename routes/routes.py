@@ -1789,6 +1789,53 @@ def create_pbx_llm(
         llm_id=f"{llm.id}"
     )
    
+@router.get("/pbx-llm/{llm_id}")
+def get_pbx_llm(llm_id: str, db: Session = Depends(get_db)):
+    # Fetch PBXLLM by id
+    llm = db.query(PBXLLM).filter(PBXLLM.id == llm_id).first()
+
+    if not llm:
+        # Return 404 if not found
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": False,
+                "message": f"LLM with id {llm_id} not found",
+                "data": None
+            }
+        )
+
+    # Build response data
+    llm_data = {
+        "llm_id": llm.id,
+        "version": llm.version,
+        "model": llm.model,
+        "s2s_model": llm.s2s_model,
+        "model_temperature": llm.model_temperature,
+        "model_high_priority": llm.model_high_priority,
+        "tool_call_strict_mode": llm.tool_call_strict_mode,
+        "general_prompt": llm.general_prompt,
+        "general_tools": llm.general_tools,
+        "states": llm.states,
+        "starting_state": llm.starting_state,
+        "begin_message": llm.begin_message,
+        "default_dynamic_variables": llm.default_dynamic_variables,
+        "knowledge_base_ids": llm.knowledge_base_ids,
+        "last_modification_timestamp": llm.last_modification_timestamp,
+        "is_published": llm.is_published
+    }
+
+    # Return wrapped response
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": True,
+            "message": "",
+            "data": llm_data
+        }
+    )
+
+
 @router.get("/all-pbx-llms/{workspace_id}")
 def get_pbx_llm(
     workspace_id=int,
@@ -1829,14 +1876,6 @@ def get_pbx_llm(
             status_code=500
         )
 
-
-# @router.get("/all-pbx-llms/{workspace_id}", response_model=List[PBXLLMOut])
-# def list_pbx_llms(
-#     workspace_id=int,
-#     db: Session = Depends(get_db)
-# ):
-#     llms = db.query(PBXLLM).filter(PBXLLM.workspace_id == workspace_id).all()
-#     return [PBXLLMOut.model_validate(llm) for llm in llms]
 
 # Chat room APIs--------------------------------------------------
 @router.post("/create-chat", response_model=CreateChatResponse)
