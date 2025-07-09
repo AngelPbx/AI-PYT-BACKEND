@@ -14,7 +14,7 @@ import requests
 from bs4 import BeautifulSoup
 import time,json
 from livekit import api
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import sessionmaker, Session
 from db.database import get_db, get_current_user
 from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, 
