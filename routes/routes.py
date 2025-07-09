@@ -2276,13 +2276,21 @@ def list_phone_numbers(
 @router.post("/call/create-web-call", response_model=WebCallResponse)
 def create_web_call(
     payload: WebCallCreateRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     # Fetch agent details from pbx_ai_agent table
     agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == payload.agent_id).first()
+   
     if not agent:
-        raise HTTPException(status_code=404, detail="Agent not found")
-
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": False,
+                "message": "Agent not found",
+                "data": None
+            }
+        )
     # Generate unique call_id and access_token
     call_id = uuid.uuid4().hex
     access_token = uuid.uuid4().hex
@@ -2329,7 +2337,7 @@ def create_web_call(
     db.commit()
     db.refresh(new_web_call)
 
-    return WebCallResponse(
+    data = WebCallResponse(
         call_type=new_web_call.call_type,
         access_token=new_web_call.access_token,
         call_id=new_web_call.call_id,
@@ -2357,5 +2365,14 @@ def create_web_call(
         call_analysis=new_web_call.call_analysis,
         call_cost=new_web_call.call_cost,
         llm_token_usage=new_web_call.llm_token_usage
+    ).dict()
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": True,
+            "message": "Web call created successfully",
+            "data": data
+        }
     )
 
