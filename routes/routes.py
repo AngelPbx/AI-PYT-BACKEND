@@ -720,11 +720,11 @@ def create_knowledge_base(
     current_user: User = Depends(get_current_user)
 ):
     try:
+        # Validate workspace
         workspace = db.query(Workspace).filter(
             Workspace.id == workspace_id,
             Workspace.owner_id == current_user.id
         ).first()
-
         if not workspace:
             return format_response(
                 status=False,
@@ -733,6 +733,7 @@ def create_knowledge_base(
                 status_code=404
             )
 
+        # Validate name
         if not name.strip():
             return format_response(
                 status=False,
@@ -741,37 +742,69 @@ def create_knowledge_base(
                 status_code=400
             )
 
+        # Create knowledge base folder and metadata
         kb_id = f"knowledge_base_{uuid.uuid4().hex[:16]}"
         kb_folder = UPLOAD_DIR / f"workspace_{workspace_id}" / kb_id
         kb_folder.mkdir(parents=True, exist_ok=True)
-
         now_utc = datetime.utcnow()
+
+        # Create KnowledgeBase entry
+        kb = KnowledgeBase(
+            id=kb_id,
+            name=name,
+            file_path=str(kb_folder),
+            workspace_id=workspace_id,
+            enable_auto_refresh=True,
+            auto_refresh_interval=24,
+            last_refreshed=now_utc
+        )
+        db.add(kb)
+        db.flush()  # Get kb.id before commit
+
         sources = []
 
-        # Process files
+        # Process uploaded files
         for file in files:
-            if file.filename:
+            if file and file.filename:
                 filename = f"{uuid.uuid4().hex}_{file.filename}"
                 file_path = kb_folder / filename
                 with open(file_path, "wb") as f:
                     f.write(file.file.read())
+
+                db.add(KnowledgeFile(
+                    kb_id=kb.id,
+                    filename=filename,
+                    file_path=str(file_path),
+                    source_type=SourceStatus.file,
+                    status=FileStatus.pending
+                ))
+
                 sources.append({
                     "type": "document",
-                    "source_id": str(workspace_id),
+                    "source_id": kb.id,
                     "filename": filename,
                     "file_url": str(file_path)
                 })
 
-        # Process URLs
+        # Process web URLs
         for url in urls or []:
             if url.strip():
                 filename = f"web_{uuid.uuid4().hex}.txt"
                 file_path = kb_folder / filename
                 with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(f"Crawled content from {url}")  # Replace with actual crawler later
+                    f.write(f"Crawled content from {url}")  # placeholder
+
+                db.add(KnowledgeFile(
+                    kb_id=kb.id,
+                    filename=filename,
+                    file_path=str(file_path),
+                    source_type=SourceStatus.web_page,
+                    status=FileStatus.pending
+                ))
+
                 sources.append({
                     "type": "web_page",
-                    "source_id": str(workspace_id),
+                    "source_id": kb.id,
                     "filename": filename,
                     "file_url": str(file_path)
                 })
@@ -783,9 +816,18 @@ def create_knowledge_base(
                 file_path = kb_folder / filename
                 with open(file_path, "w", encoding="utf-8") as f:
                     f.write(content)
+
+                db.add(KnowledgeFile(
+                    kb_id=kb.id,
+                    filename=filename,
+                    file_path=str(file_path),
+                    source_type=SourceStatus.text,
+                    status=FileStatus.pending
+                ))
+
                 sources.append({
                     "type": "text",
-                    "source_id": str(workspace_id),
+                    "source_id": kb.id,
                     "filename": filename,
                     "file_url": str(file_path)
                 })
@@ -797,17 +839,6 @@ def create_knowledge_base(
                 errors=[{"field": "sources", "message": "Provide at least one file, URL, or text"}]
             )
 
-        # Create KnowledgeBase
-        kb = KnowledgeBase(
-            id=kb_id,
-            name=name,
-            file_path=str(kb_folder),
-            workspace_id=workspace_id,
-            enable_auto_refresh=True,
-            auto_refresh_interval=24,
-            last_refreshed=now_utc
-        )
-        db.add(kb)
         db.commit()
         db.refresh(kb)
 
@@ -887,63 +918,6 @@ def list_kbs(
             status=False,
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
-        )
-
-# To create a knowledge base, we need to ensure the user is a member of the workspace
-@router.post("/knowledge-bases")
-def create_knowledge_base(
-    kb_data: KnowledgeBaseCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    try:
-        # Validate workspace membership or ownership here
-        membership = db.query(WorkspaceMember).filter_by(
-            workspace_id=kb_data.workspace_id,
-            user_id=current_user.id
-        ).first()
-        if not membership:
-            return format_response(
-                status=False,
-                message="Access denied",
-                errors=[{"field": "workspace_id", "message": "User is not a member of this workspace"}],
-                status_code=403
-            )
-
-        # Generate a unique string ID for the knowledge base
-        # kb_id = uuid4().hex
-        # print(f"Generated KB ID: {kb_id}")
-        print(f"Knowledge Base Data: {kb_data}")
-        kb = KnowledgeBase(
-            # id=kb_id,
-            name=kb_data.name,
-            file_path="",
-            workspace_id=kb_data.workspace_id,
-            created_at=datetime.utcnow(),
-            enable_auto_refresh=False,  # default or configurable
-            last_refreshed=None
-        )
-        db.add(kb)
-        db.commit()
-        db.refresh(kb)
-
-        return format_response(
-            status=True,
-            message="Knowledge base created successfully",
-            data={
-                "id": kb.id,
-                "name": kb.name,
-                "workspace_id": kb.workspace_id,
-                "created_at": kb.created_at.isoformat()
-            }
-        )
-    except Exception as e:
-        db.rollback()
-        return format_response(
-            status=False,
-            message="Internal Server Error",
-            errors=[{"field": "server", "message": str(e)}],
-            status_code=500
         )
     
 @router.get("/knowledge-bases/{kb_id}")

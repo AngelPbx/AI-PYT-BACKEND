@@ -83,8 +83,8 @@ class FileStatus(str, enum.Enum):
 
 class SourceStatus(str, enum.Enum):
     file = "file"
-    url = "url"
-    txt = "txt"
+    web_page = "web_page"
+    text = "text"
 
 class KnowledgeFile(Base):
     __tablename__ = "knowledge_files"
