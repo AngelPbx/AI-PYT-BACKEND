@@ -428,6 +428,7 @@ class WebCallResponse(BaseModel):
     access_token: str
     call_id: str
     agent_id: str
+    agent_name: Optional[str]
     agent_version: Optional[int]
     call_status: str
     call_metadata: Optional[Dict[str, Any]]

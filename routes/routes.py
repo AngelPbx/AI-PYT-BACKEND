@@ -2278,6 +2278,11 @@ def create_web_call(
     payload: WebCallCreateRequest,
     db: Session = Depends(get_db)
 ):
+    # Fetch agent details from pbx_ai_agent table
+    agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == payload.agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
     # Generate unique call_id and access_token
     call_id = uuid.uuid4().hex
     access_token = uuid.uuid4().hex
@@ -2285,35 +2290,25 @@ def create_web_call(
     # Create WebCall DB record
     new_web_call = WebCall(
         call_type="web_call",
+        call_id=call_id,  # ✅ Set call_id here
         access_token=access_token,
-        call_id=call_id,
-        agent_id=payload.agent_id,
-        agent_version=payload.agent_version or 1,
+        agent_id=agent.id,
+        agent_version=agent.version,
         call_status="registered",
-        call_metadata=payload.call_metadata or {},
-        retell_llm_dynamic_variables=payload.retell_llm_dynamic_variables or {},
-        created_at=int(time.time() * 1000),
-        updated_at=int(time.time() * 1000)
-    )
-
-    db.add(new_web_call)
-    db.commit()
-    db.refresh(new_web_call)
-
-    # Build response
-    response = WebCallResponse(
-        call_type="web_call",
-        access_token=access_token,
-        call_id=call_id,
-        agent_id=payload.agent_id,
-        agent_version=new_web_call.agent_version,
-        call_status="registered",
-        call_metadata=dict(new_web_call.call_metadata) if new_web_call.call_metadata else {},
-        retell_llm_dynamic_variables=dict(new_web_call.retell_llm_dynamic_variables) if new_web_call.retell_llm_dynamic_variables else {},
+        call_metadata={},
+        retell_llm_dynamic_variables={},
         collected_dynamic_variables={},
         custom_sip_headers={},
-        opt_out_sensitive_data_storage=False,
-        opt_in_signed_url=True,
+        latency={},
+        call_cost={
+            "product_costs": [],
+            "total_duration_unit_price": 0,
+            "total_duration_seconds": 0,
+            "total_one_time_price": 0,
+            "combined_cost": 0
+        },
+        opt_out_sensitive_data_storage=agent.opt_out_sensitive_data_storage,
+        opt_in_signed_url=agent.opt_in_signed_url,
         start_timestamp=None,
         end_timestamp=None,
         duration_ms=None,
@@ -2323,25 +2318,44 @@ def create_web_call(
         recording_url=None,
         public_log_url=None,
         knowledge_base_retrieved_contents_url=None,
-        latency={},
         disconnection_reason=None,
         call_analysis=None,
-        call_cost=None,
-        llm_token_usage=None
+        llm_token_usage=None,
+        created_at=int(time.time() * 1000),
+        updated_at=int(time.time() * 1000)
     )
 
-    return response
+    db.add(new_web_call)
+    db.commit()
+    db.refresh(new_web_call)
 
-@router.get("/webcall/list", response_model=List[WebCallResponse])
-def list_web_calls(db: Session = Depends(get_db)):
-    """
-    Get all registered web calls.
-    """
-    web_calls = db.query(WebCall).all()
+    return WebCallResponse(
+        call_type=new_web_call.call_type,
+        access_token=new_web_call.access_token,
+        call_id=new_web_call.call_id,
+        agent_id=new_web_call.agent_id,
+        agent_name=agent.name,
+        agent_version=new_web_call.agent_version,
+        call_status=new_web_call.call_status,
+        call_metadata=new_web_call.call_metadata,
+        retell_llm_dynamic_variables=new_web_call.retell_llm_dynamic_variables,
+        collected_dynamic_variables=new_web_call.collected_dynamic_variables,
+        custom_sip_headers=new_web_call.custom_sip_headers,
+        opt_out_sensitive_data_storage=new_web_call.opt_out_sensitive_data_storage,
+        opt_in_signed_url=new_web_call.opt_in_signed_url,
+        start_timestamp=new_web_call.start_timestamp,
+        end_timestamp=new_web_call.end_timestamp,
+        duration_ms=new_web_call.duration_ms,
+        transcript=new_web_call.transcript,
+        transcript_object=new_web_call.transcript_object,
+        transcript_with_tool_calls=new_web_call.transcript_with_tool_calls,
+        recording_url=new_web_call.recording_url,
+        public_log_url=new_web_call.public_log_url,
+        knowledge_base_retrieved_contents_url=new_web_call.knowledge_base_retrieved_contents_url,
+        latency=new_web_call.latency,
+        disconnection_reason=new_web_call.disconnection_reason,
+        call_analysis=new_web_call.call_analysis,
+        call_cost=new_web_call.call_cost,
+        llm_token_usage=new_web_call.llm_token_usage
+    )
 
-    # Convert JSON fields to dicts for Pydantic compatibility
-    for call in web_calls:
-        call.call_metadata = dict(call.call_metadata) if call.call_metadata else {}
-        call.retell_llm_dynamic_variables = dict(call.retell_llm_dynamic_variables) if call.retell_llm_dynamic_variables else {}
-
-    return web_calls
