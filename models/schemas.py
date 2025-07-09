@@ -199,7 +199,6 @@ class AgentOut(AgentCreate):
     last_modification_timestamp: Optional[int]
 
     class Config:
-        orm_mode = True  # For Pydantic v1
         from_attributes = True  # for Pydantic v2
         validate_by_name = True
 
@@ -223,7 +222,6 @@ class GetPBXLLMOut(BaseModel):
     last_modification_timestamp: int
 
     class Config:
-        orm_mode = True  # For Pydantic v1
         from_attributes = True  # for Pydantic v2
         validate_by_name = True
 # PBX LLM SCHEMAS----------------------------------------------
