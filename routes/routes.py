@@ -711,12 +711,11 @@ def delete_workspace(
 @router.post("/workspaces/knowledge-bases")
 def create_knowledge_base(
     workspace_id: int = Form(...),
-    source_type: str = Form(...),  # 'file', 'web_page', or 'text'
     name: str = Form(...),
-    file: UploadFile = File(None),
-    url: str = Form(None),
-    text_filename: str = Form(None),
-    text_content: str = Form(None),
+    files: List[UploadFile] = File(default=[]),
+    urls: Optional[List[str]] = Form(default=[]),
+    text_filenames: Optional[List[str]] = Form(default=[]),
+    text_contents: Optional[List[str]] = Form(default=[]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -733,7 +732,7 @@ def create_knowledge_base(
                 errors=[{"field": "workspace_id", "message": "Workspace not found"}],
                 status_code=404
             )
-            
+
         if not name.strip():
             return format_response(
                 status=False,
@@ -742,80 +741,67 @@ def create_knowledge_base(
                 status_code=400
             )
 
-        kb_id_str = f"knowledge_base_{uuid.uuid4().hex[:16]}"
-        kb_folder = UPLOAD_DIR / f"workspace_{workspace_id}" / kb_id_str
+        kb_id = f"knowledge_base_{uuid.uuid4().hex[:16]}"
+        kb_folder = UPLOAD_DIR / f"workspace_{workspace_id}" / kb_id
         kb_folder.mkdir(parents=True, exist_ok=True)
 
         now_utc = datetime.utcnow()
-        file_path = None
-        file_name = None
-        source_details = {}
+        sources = []
 
-        if source_type == "file":
-            if not file:
-                return format_response(
-                    status=False,
-                    message="File upload required",
-                    errors=[{"field": "file", "message": "No file uploaded"}]
-                )
-            file_name = f"{uuid.uuid4().hex}_{file.filename}"
-            file_path = kb_folder / file_name
-            with open(file_path, "wb") as buffer:
-                buffer.write(file.file.read())
-            source_details = {
-                "type": "document",
-                "source_id": str(workspace_id),
-                "filename": file_name,
-                "file_url": str(file_path)
-            }
+        # Process files
+        for file in files:
+            if file.filename:
+                filename = f"{uuid.uuid4().hex}_{file.filename}"
+                file_path = kb_folder / filename
+                with open(file_path, "wb") as f:
+                    f.write(file.file.read())
+                sources.append({
+                    "type": "document",
+                    "source_id": str(workspace_id),
+                    "filename": filename,
+                    "file_url": str(file_path)
+                })
 
-        elif source_type == "web_page":
-            if not url:
-                return format_response(
-                    status=False,
-                    message="URL required",
-                    errors=[{"field": "url", "message": "No URL provided"}]
-                )
-            file_name = f"web_{uuid.uuid4().hex}.txt"
-            file_path = kb_folder / file_name
-           
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(f"Crawled content from {url}")  # to complet crawler logic
-            source_details = {
-                "type": "web_page",
-                "source_id": str(workspace_id),
-                "filename": file_name,
-                "file_url": str(file_path)
-            }
+        # Process URLs
+        for url in urls or []:
+            if url.strip():
+                filename = f"web_{uuid.uuid4().hex}.txt"
+                file_path = kb_folder / filename
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(f"Crawled content from {url}")  # Replace with actual crawler later
+                sources.append({
+                    "type": "web_page",
+                    "source_id": str(workspace_id),
+                    "filename": filename,
+                    "file_url": str(file_path)
+                })
 
-        elif source_type == "text":
-            if not text_filename or not text_content:
-                return format_response(
-                    status=False,
-                    message="Text filename and content required",
-                    errors=[{"field": "text", "message": "Missing text filename or content"}]
-                )
-            file_name = f"{uuid.uuid4().hex}_{text_filename}.txt"
-            file_path = kb_folder / file_name
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(text_content)
-            source_details = {
-                "type": "text",
-                "source_id": str(workspace_id),
-                "filename": file_name,
-                "file_url": str(file_path)
-            }
+        # Process text entries
+        for title, content in zip(text_filenames or [], text_contents or []):
+            if title.strip() and content.strip():
+                filename = f"{uuid.uuid4().hex}_{title}.txt"
+                file_path = kb_folder / filename
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                sources.append({
+                    "type": "text",
+                    "source_id": str(workspace_id),
+                    "filename": filename,
+                    "file_url": str(file_path)
+                })
 
-        else:
+        if not sources:
             return format_response(
                 status=False,
-                message="Invalid source type",
-                errors=[{"field": "source_type", "message": "Must be one of: file, web_page, text"}]
+                message="No valid sources provided",
+                errors=[{"field": "sources", "message": "Provide at least one file, URL, or text"}]
             )
 
+        # Create KnowledgeBase
         kb = KnowledgeBase(
+            id=kb_id,
             name=name,
-            file_path=str(file_path),
+            file_path=str(kb_folder),
             workspace_id=workspace_id,
             enable_auto_refresh=True,
             auto_refresh_interval=24,
@@ -825,19 +811,17 @@ def create_knowledge_base(
         db.commit()
         db.refresh(kb)
 
-        response_data = {
-            "knowledge_base_id": kb_id_str,
-            "knowledge_base_name": kb.name,
-            "status": "in_progress",
-            "knowledge_base_sources": [source_details],
-            "enable_auto_refresh": kb.enable_auto_refresh,
-            "last_refreshed_timestamp": int(now_utc.timestamp() * 1000)
-        }
-
         return format_response(
             status=True,
             message="Knowledge base created successfully",
-            data=response_data
+            data={
+                "knowledge_base_id": kb.id,
+                "knowledge_base_name": kb.name,
+                "status": "in_progress",
+                "knowledge_base_sources": sources,
+                "enable_auto_refresh": kb.enable_auto_refresh,
+                "last_refreshed_timestamp": int(now_utc.timestamp() * 1000)
+            }
         )
 
     except Exception as e:
