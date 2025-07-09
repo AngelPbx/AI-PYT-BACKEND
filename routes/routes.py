@@ -854,15 +854,26 @@ def list_kbs(
 
         kbs = db.query(KnowledgeBase).filter_by(workspace_id=workspace_id).all()
 
-        data = [
-            {
-                "id": kb.id,
-                "name": kb.name,
-                "file_path": kb.file_path,
-                "workspace_id": kb.workspace_id,
-                "created_at": format_datetime_ist(kb.created_at)
-            } for kb in kbs
-        ]
+        data = []
+        for kb in kbs:
+            sources = []
+            for file in kb.knowledge_files:
+                sources.append({
+                    "type": file.source_type.value if file.source_type else "document",
+                    "source_id": file.kb_id,
+                    "filename": file.filename,
+                    "file_url": file.file_path
+                })
+
+            kb_info = {
+                "knowledge_base_id": kb.id,
+                "knowledge_base_name": kb.name,
+                "status": "in_progress",  # or determine real status if available
+                "knowledge_base_sources": sources,
+                "enable_auto_refresh": kb.enable_auto_refresh,
+                "last_refreshed_timestamp": int(kb.last_refreshed.timestamp() * 1000) if kb.last_refreshed else None
+            }
+            data.append(kb_info)
 
         return format_response(
             status=True,
