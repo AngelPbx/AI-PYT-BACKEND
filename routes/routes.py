@@ -1789,6 +1789,55 @@ def create_pbx_llm(
         llm_id=f"{llm.id}"
     )
    
+@router.get("/pbx-llm/{llm_id}")
+def get_pbx_llm(llm_id: str, 
+                current_user: User = Depends(get_current_user),
+                db: Session = Depends(get_db)):
+    # Fetch PBXLLM by id
+    llm = db.query(PBXLLM).filter(PBXLLM.id == llm_id).first()
+
+    if not llm:
+        # Return 404 if not found
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": False,
+                "message": f"LLM with id {llm_id} not found",
+                "data": None
+            }
+        )
+
+    # Build response data
+    llm_data = {
+        "llm_id": llm.id,
+        "version": llm.version,
+        "model": llm.model,
+        "s2s_model": llm.s2s_model,
+        "model_temperature": llm.model_temperature,
+        "model_high_priority": llm.model_high_priority,
+        "tool_call_strict_mode": llm.tool_call_strict_mode,
+        "general_prompt": llm.general_prompt,
+        "general_tools": llm.general_tools,
+        "states": llm.states,
+        "starting_state": llm.starting_state,
+        "begin_message": llm.begin_message,
+        "default_dynamic_variables": llm.default_dynamic_variables,
+        "knowledge_base_ids": llm.knowledge_base_ids,
+        "last_modification_timestamp": llm.last_modification_timestamp,
+        "is_published": llm.is_published
+    }
+
+    # Return wrapped response
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": True,
+            "message": "",
+            "data": llm_data
+        }
+    )
+
+
 @router.get("/all-pbx-llms/{workspace_id}")
 def get_pbx_llm(
     workspace_id=int,
@@ -1829,14 +1878,6 @@ def get_pbx_llm(
             status_code=500
         )
 
-
-# @router.get("/all-pbx-llms/{workspace_id}", response_model=List[PBXLLMOut])
-# def list_pbx_llms(
-#     workspace_id=int,
-#     db: Session = Depends(get_db)
-# ):
-#     llms = db.query(PBXLLM).filter(PBXLLM.workspace_id == workspace_id).all()
-#     return [PBXLLMOut.model_validate(llm) for llm in llms]
 
 # Chat room APIs--------------------------------------------------
 @router.post("/create-chat", response_model=CreateChatResponse)
@@ -2276,8 +2317,21 @@ def list_phone_numbers(
 @router.post("/call/create-web-call", response_model=WebCallResponse)
 def create_web_call(
     payload: WebCallCreateRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
+    # Fetch agent details from pbx_ai_agent table
+    agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == payload.agent_id).first()
+   
+    if not agent:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": False,
+                "message": "Agent not found",
+                "data": None
+            }
+        )
     # Generate unique call_id and access_token
     call_id = uuid.uuid4().hex
     access_token = uuid.uuid4().hex
@@ -2285,35 +2339,25 @@ def create_web_call(
     # Create WebCall DB record
     new_web_call = WebCall(
         call_type="web_call",
+        call_id=call_id,  # ✅ Set call_id here
         access_token=access_token,
-        call_id=call_id,
-        agent_id=payload.agent_id,
-        agent_version=payload.agent_version or 1,
+        agent_id=agent.id,
+        agent_version=agent.version,
         call_status="registered",
-        call_metadata=payload.call_metadata or {},
-        retell_llm_dynamic_variables=payload.retell_llm_dynamic_variables or {},
-        created_at=int(time.time() * 1000),
-        updated_at=int(time.time() * 1000)
-    )
-
-    db.add(new_web_call)
-    db.commit()
-    db.refresh(new_web_call)
-
-    # Build response
-    response = WebCallResponse(
-        call_type="web_call",
-        access_token=access_token,
-        call_id=call_id,
-        agent_id=payload.agent_id,
-        agent_version=new_web_call.agent_version,
-        call_status="registered",
-        call_metadata=dict(new_web_call.call_metadata) if new_web_call.call_metadata else {},
-        retell_llm_dynamic_variables=dict(new_web_call.retell_llm_dynamic_variables) if new_web_call.retell_llm_dynamic_variables else {},
+        call_metadata={},
+        retell_llm_dynamic_variables={},
         collected_dynamic_variables={},
         custom_sip_headers={},
-        opt_out_sensitive_data_storage=False,
-        opt_in_signed_url=True,
+        latency={},
+        call_cost={
+            "product_costs": [],
+            "total_duration_unit_price": 0,
+            "total_duration_seconds": 0,
+            "total_one_time_price": 0,
+            "combined_cost": 0
+        },
+        opt_out_sensitive_data_storage=agent.opt_out_sensitive_data_storage,
+        opt_in_signed_url=agent.opt_in_signed_url,
         start_timestamp=None,
         end_timestamp=None,
         duration_ms=None,
@@ -2323,25 +2367,53 @@ def create_web_call(
         recording_url=None,
         public_log_url=None,
         knowledge_base_retrieved_contents_url=None,
-        latency={},
         disconnection_reason=None,
         call_analysis=None,
-        call_cost=None,
-        llm_token_usage=None
+        llm_token_usage=None,
+        created_at=int(time.time() * 1000),
+        updated_at=int(time.time() * 1000)
     )
 
-    return response
+    db.add(new_web_call)
+    db.commit()
+    db.refresh(new_web_call)
 
-@router.get("/webcall/list", response_model=List[WebCallResponse])
-def list_web_calls(db: Session = Depends(get_db)):
-    """
-    Get all registered web calls.
-    """
-    web_calls = db.query(WebCall).all()
+    data = WebCallResponse(
+        call_type=new_web_call.call_type,
+        access_token=new_web_call.access_token,
+        call_id=new_web_call.call_id,
+        agent_id=new_web_call.agent_id,
+        agent_name=agent.name,
+        agent_version=new_web_call.agent_version,
+        call_status=new_web_call.call_status,
+        call_metadata=new_web_call.call_metadata,
+        retell_llm_dynamic_variables=new_web_call.retell_llm_dynamic_variables,
+        collected_dynamic_variables=new_web_call.collected_dynamic_variables,
+        custom_sip_headers=new_web_call.custom_sip_headers,
+        opt_out_sensitive_data_storage=new_web_call.opt_out_sensitive_data_storage,
+        opt_in_signed_url=new_web_call.opt_in_signed_url,
+        start_timestamp=new_web_call.start_timestamp,
+        end_timestamp=new_web_call.end_timestamp,
+        duration_ms=new_web_call.duration_ms,
+        transcript=new_web_call.transcript,
+        transcript_object=new_web_call.transcript_object,
+        transcript_with_tool_calls=new_web_call.transcript_with_tool_calls,
+        recording_url=new_web_call.recording_url,
+        public_log_url=new_web_call.public_log_url,
+        knowledge_base_retrieved_contents_url=new_web_call.knowledge_base_retrieved_contents_url,
+        latency=new_web_call.latency,
+        disconnection_reason=new_web_call.disconnection_reason,
+        call_analysis=new_web_call.call_analysis,
+        call_cost=new_web_call.call_cost,
+        llm_token_usage=new_web_call.llm_token_usage
+    ).dict()
 
-    # Convert JSON fields to dicts for Pydantic compatibility
-    for call in web_calls:
-        call.call_metadata = dict(call.call_metadata) if call.call_metadata else {}
-        call.retell_llm_dynamic_variables = dict(call.retell_llm_dynamic_variables) if call.retell_llm_dynamic_variables else {}
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": True,
+            "message": "Web call created successfully",
+            "data": data
+        }
+    )
 
-    return web_calls

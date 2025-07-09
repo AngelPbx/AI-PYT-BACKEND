@@ -10,11 +10,12 @@ from sqlalchemy import select,create_engine
 from models.models import KnowledgeFile
 load_dotenv()
 import logging
+from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from openai import OpenAI
 import numpy as np
 from dataclasses import dataclass
 from typing import AsyncIterable, Optional
-from livekit.plugins import deepgram, openai, silero, noise_cancellation
+from livekit.plugins import deepgram, openai, silero, noise_cancellation,elevenlabs
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -133,15 +134,22 @@ async def entrypoint(ctx: agents.JobContext):
     logger.info(f"✅ Starting agent | kb_id={kb_id}, persona={persona}")
     userdata = UserData(kb_id=kb_id, persona=persona, ctx=ctx)
 
-
+# llm congiguration
     session = AgentSession(
         userdata=userdata,
+        stt=deepgram.STT(model="nova-3", language="multi"),
+        llm=openai.LLM(model="gpt-4o-mini"),
+        tts=elevenlabs.TTS(voice_id="ODq5zmih8GrVes37Dizd",model="eleven_multilingual_v2"),
+        vad=silero.VAD.load(),
+        turn_detection=MultilingualModel(),
    
-        llm=openai.realtime.RealtimeModel(
-            voice="coral"
-        )
+        # llm=openai.realtime.RealtimeModel(
+        #     voice="coral"
+        # )
     )
-    
+# ////////////////////////////
+
+
     await session.start(
         room=ctx.room,
         agent=Assistant(persona=persona),

@@ -203,6 +203,7 @@ class AgentOut(AgentCreate):
         validate_by_name = True
 
 class GetPBXLLMOut(BaseModel):
+    id: str
     workspace_id: int
     version: int
     model: Optional[str]
@@ -426,6 +427,7 @@ class WebCallResponse(BaseModel):
     access_token: str
     call_id: str
     agent_id: str
+    agent_name: Optional[str]
     agent_version: Optional[int]
     call_status: str
     call_metadata: Optional[Dict[str, Any]]

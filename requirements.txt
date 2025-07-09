@@ -25,3 +25,4 @@ SQLAlchemy
 starlette
 uvicorn
 bcrypt
+livekit-agents[elevenlabs]~=1.0
