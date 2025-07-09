@@ -8,17 +8,22 @@ from livekit.plugins import openai, noise_cancellation
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import select,create_engine
 from models.models import KnowledgeFile
-load_dotenv()
 import logging
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from openai import OpenAI
 import numpy as np
 from dataclasses import dataclass
 from typing import AsyncIterable, Optional
-from livekit.plugins import deepgram, openai, silero, noise_cancellation,elevenlabs
+from livekit.plugins import (
+    openai,
+    cartesia,
+    deepgram,
+    noise_cancellation,
+    silero,
+    elevenlabs
+)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
+load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
@@ -137,15 +142,11 @@ async def entrypoint(ctx: agents.JobContext):
 # llm congiguration
     session = AgentSession(
         userdata=userdata,
-        stt=deepgram.STT(model="nova-3", language="multi"),
-        llm=openai.LLM(model="gpt-4o-mini"),
-        tts=elevenlabs.TTS(voice_id="ODq5zmih8GrVes37Dizd",model="eleven_multilingual_v2"),
+        stt=deepgram.STT(),
+        llm=openai.LLM(),
+        tts=elevenlabs.TTS(api_key=os.getenv("ELEVENLABS_API_KEY")),
         vad=silero.VAD.load(),
-        turn_detection=MultilingualModel(),
    
-        # llm=openai.realtime.RealtimeModel(
-        #     voice="coral"
-        # )
     )
 # ////////////////////////////
 
@@ -166,4 +167,4 @@ async def entrypoint(ctx: agents.JobContext):
 
 
 if __name__ == "__main__":
-    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint,agent_name="kb-voice-agent"))
+    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
