@@ -2290,7 +2290,7 @@ def create_web_call(
         agent_id=payload.agent_id,
         agent_version=payload.agent_version or 1,
         call_status="registered",
-        call_metadata=payload.metadata or {},
+        call_metadata=payload.call_metadata or {},
         retell_llm_dynamic_variables=payload.retell_llm_dynamic_variables or {},
         created_at=int(time.time() * 1000),
         updated_at=int(time.time() * 1000)
@@ -2308,8 +2308,8 @@ def create_web_call(
         agent_id=payload.agent_id,
         agent_version=new_web_call.agent_version,
         call_status="registered",
-        call_metadata=new_web_call.metadata,
-        retell_llm_dynamic_variables=new_web_call.retell_llm_dynamic_variables,
+        call_metadata=dict(new_web_call.call_metadata) if new_web_call.call_metadata else {},
+        retell_llm_dynamic_variables=dict(new_web_call.retell_llm_dynamic_variables) if new_web_call.retell_llm_dynamic_variables else {},
         collected_dynamic_variables={},
         custom_sip_headers={},
         opt_out_sensitive_data_storage=False,
@@ -2331,3 +2331,17 @@ def create_web_call(
     )
 
     return response
+
+@router.get("/webcall/list", response_model=List[WebCallResponse])
+def list_web_calls(db: Session = Depends(get_db)):
+    """
+    Get all registered web calls.
+    """
+    web_calls = db.query(WebCall).all()
+
+    # Convert JSON fields to dicts for Pydantic compatibility
+    for call in web_calls:
+        call.call_metadata = dict(call.call_metadata) if call.call_metadata else {}
+        call.retell_llm_dynamic_variables = dict(call.retell_llm_dynamic_variables) if call.retell_llm_dynamic_variables else {}
+
+    return web_calls

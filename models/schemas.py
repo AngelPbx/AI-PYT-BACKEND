@@ -393,7 +393,7 @@ class APIResponse(BaseModel):
 class WebCallCreateRequest(BaseModel):
     agent_id: str
     agent_version: Optional[int] = None
-    metadata: Optional[Dict[str, Any]] = None
+    call_metadata: Optional[Dict[str, Any]] = None
     retell_llm_dynamic_variables: Optional[Dict[str, str]] = None
 
 class LatencyMetrics(BaseModel):
