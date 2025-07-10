@@ -1,4 +1,4 @@
-#save test py for agent ## natty
+#10/07/25 save test py for agent ## natty
 import asyncio
 import os,json
 from dotenv import load_dotenv
@@ -10,7 +10,6 @@ from sqlalchemy import select,create_engine
 from models.models import KnowledgeFile
 load_dotenv()
 import logging
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 from openai import OpenAI
 import numpy as np
 from dataclasses import dataclass
@@ -81,23 +80,23 @@ async def search_knowledge_base(context: RunContext, query: str) -> str:
         logger.warning("❌ No kb_id found in session metadata.")
         return "Knowledge base ID is missing. Cannot search."
 
-    async def _speak_status_update(delay: float = 0.5):
-        await asyncio.sleep(delay)
-        logger.info("✅Status update: search taking longer than expected.")
-        await context.session.generate_reply(
-            instructions=f"""You are searching the knowledge base for "{query}" but it's taking a little while. Briefly update the user about the progress."""
-        )
+    # async def _speak_status_update(delay: float = 0.5):
+    #     await asyncio.sleep(delay)
+    #     logger.info("✅Status update: search taking longer than expected.")
+    #     await context.session.generate_reply(
+    #         instructions=f"""Searching right now.."""
+    #     )
 
-    status_update_task = asyncio.create_task(_speak_status_update())
+    # status_update_task = asyncio.create_task(_speak_status_update())
 
     try:
         result = await asyncio.to_thread(_perform_search, query, kb_id)
-        if not status_update_task.done():
-            status_update_task.cancel()
-            try:
-                await status_update_task
-            except asyncio.CancelledError:
-                logger.info("✅ Status update task cancelled cleanly.")
+        # if not status_update_task.done():
+        #     status_update_task.cancel()
+        #     try:
+        #         await status_update_task
+        #     except asyncio.CancelledError:
+        #         logger.info("✅ Status update task cancelled cleanly.")
         # status_update_task.cancel()
         return result or "⚠️ No relevant information found in the knowledge base."
     except asyncio.CancelledError:
@@ -121,9 +120,15 @@ class Assistant(Agent):
     def __init__(self, persona: str = None) -> None:
         super().__init__(
              instructions=f"""{persona}.You MUST answer user questions by calling the tool 'search_knowledge_base'.
-    DO NOT answer from your own knowledge. If the tool does not return a result, tell the user you could not find relevant information.""",
+DO NOT answer from your own knowledge.
+If the tool does not return a result, reply exactly: "I have no data about that.".""",
             
             tools=[search_knowledge_base]
+        )
+    async def on_enter(self):
+        # ✅ Greet the user when they join the room
+        await self.session.generate_reply(
+            instructions="Welcome to Angel PBX. How can I assist you today?"
         )
 
 
@@ -137,16 +142,18 @@ async def entrypoint(ctx: agents.JobContext):
 # llm congiguration
     session = AgentSession(
         userdata=userdata,
-        stt=deepgram.STT(model="nova-3", language="multi"),
-        llm=openai.LLM(model="gpt-4o-mini"),
-        tts=elevenlabs.TTS(voice_id="ODq5zmih8GrVes37Dizd",model="eleven_multilingual_v2"),
+        # stt=deepgram.STT(),
+        # tts=elevenlabs.TTS(api_key=os.getenv("ELEVENLABS_API_KEY")),
+
         vad=silero.VAD.load(),
-        turn_detection=MultilingualModel(),
-   
+        stt=openai.STT(use_realtime=True,language="en"),
+        llm=openai.LLM(model="gpt-4o-mini"),
+        tts=openai.TTS(),
         # llm=openai.realtime.RealtimeModel(
         #     voice="coral"
-        # )
-    )
+        )
+        
+    
 # ////////////////////////////
 
 
@@ -166,4 +173,4 @@ async def entrypoint(ctx: agents.JobContext):
 
 
 if __name__ == "__main__":
-    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint,agent_name="assistant"))
+    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint,agent_name="assistant",))
