@@ -1755,6 +1755,62 @@ def get_pbx_llm(llm_id: str,
         }
     )
 
+@router.patch("/pbx-llms/update-llm/{llm_id}")
+def update_pbx_llm(
+    llm_id: str,
+    payload: PBXLLMCreate,  # Or make a PBXLLMUpdate schema where all fields are Optional
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 🔥 Fetch PBXLLM by ID
+    llm = db.query(PBXLLM).filter(PBXLLM.id == llm_id).first()
+    if not llm:
+        raise HTTPException(status_code=404, detail=f"LLM with id {llm_id} not found")
+
+    # ✅ Check workspace access
+    if not is_user_in_workspace(current_user.id, llm.workspace_id, db):
+        raise HTTPException(status_code=403, detail="You do not have access to this workspace")
+
+    # 🔄 Update only provided fields
+    update_data = payload.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(llm, field, value)
+
+    # Update timestamp
+    llm.last_modification_timestamp = int(time.time() * 1000)
+
+    db.commit()
+    db.refresh(llm)
+
+    # Build response
+    updated_llm_data = {
+        "llm_id": llm.id,
+        "version": llm.version,
+        "model": llm.model,
+        "s2s_model": llm.s2s_model,
+        "model_temperature": llm.model_temperature,
+        "model_high_priority": llm.model_high_priority,
+        "tool_call_strict_mode": llm.tool_call_strict_mode,
+        "general_prompt": llm.general_prompt,
+        "general_tools": llm.general_tools,
+        "states": llm.states,
+        "starting_state": llm.starting_state,
+        "begin_message": llm.begin_message,
+        "default_dynamic_variables": llm.default_dynamic_variables,
+        "knowledge_base_ids": llm.knowledge_base_ids,
+        "last_modification_timestamp": llm.last_modification_timestamp,
+        "is_published": llm.is_published
+    }
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": True,
+            "message": "LLM updated successfully",
+            "data": updated_llm_data
+        }
+    )
+
 
 @router.get("/all-pbx-llms/{workspace_id}")
 def get_pbx_llm(
