@@ -576,3 +576,8 @@ class BasicResponse(BaseModel):
 class DIDItem(BaseModel):
     did: str
     
+class Country(BaseModel):
+    country_code: str
+    name: Optional[str] = None  # Optional, in case you also pass a name
+class CountryWithPrefix(Country):
+    prefix_code: Optional[str] = None

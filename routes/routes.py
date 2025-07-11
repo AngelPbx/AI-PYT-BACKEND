@@ -25,7 +25,7 @@ from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember,
                            )
 from models.schemas import (
     UserSignup, UserLogin, UpdateUser,DispatchRequest,CreateRoomRequestSchema,WebCallResponse,WebCallCreateRequest,GetPBXLLMOut,
-    WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, KnowledgeBaseCreate, 
+    WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, KnowledgeBaseCreate, CountryWithPrefix, Country,
     AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, CreateChatRequest, CreateChatResponse,
     VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut, APIResponse, PurchaseDIDsRequest, BasicResponse
 )
@@ -2936,3 +2936,27 @@ async def purchase_did_in_twilio(
         raise HTTPException(status_code=500, detail=f"Unable to set trunks: {trunk_result['message']}")
 
     return BasicResponse(status=True, message="Order Completed")
+
+# --- Country prefix code map ---
+country_prefix_codes = {
+    'DZ': '+213', 'AR': '+54', 'AU': '+61', 'AT': '+43', 'BB': '+1-246',
+    'BE': '+32', 'BJ': '+229', 'BA': '+387', 'BW': '+267', 'BR': '+55',
+    'BG': '+359', 'CA': '+1', 'CL': '+56', 'CO': '+57', 'HR': '+385',
+    'CZ': '+420', 'DK': '+45', 'EC': '+593', 'SV': '+503', 'EE': '+372',
+    'FI': '+358', 'GE': '+995', 'DE': '+49', 'GH': '+233', 'GR': '+30',
+    'GD': '+1-473', 'GN': '+224', 'HK': '+852', 'HU': '+36', 'IN': '+91',
+    'ID': '+62', 'IE': '+353', 'IL': '+972', 'IT': '+39', 'JP': '+81',
+    'KE': '+254', 'LT': '+370', 'MO': '+853', 'MY': '+60', 'MX': '+52',
+    'NA': '+264', 'NL': '+31', 'NZ': '+64', 'PA': '+507', 'PE': '+51',
+    'PH': '+63', 'PL': '+48', 'PT': '+351', 'PR': '+1-787', 'RO': '+40',
+    'SK': '+421', 'SI': '+386', 'ZA': '+27', 'SE': '+46', 'CH': '+41',
+    'TH': '+66', 'TN': '+216', 'GB': '+44', 'US': '+1', 'VI': '+1-340',
+}
+
+@router.post("/country/prefix-map", response_model=List[CountryWithPrefix])
+def map_country_prefix(countries: List[Country]):
+    result = []
+    for country in countries:
+        prefix = country_prefix_codes.get(country.country_code)
+        result.append(CountryWithPrefix(**country.dict(), prefix_code=prefix))
+    return result
