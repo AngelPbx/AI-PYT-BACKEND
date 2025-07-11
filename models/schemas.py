@@ -484,7 +484,7 @@ class WebCallResponse(BaseModel):
     llm_token_usage: Optional[Dict[str, Any]] = {}
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UsageModel(BaseModel):
     Voice: Optional[int] = 0
