@@ -2284,7 +2284,7 @@ def list_phone_numbers(
 # -----------------web call api--------------------------------------------------
 
 @router.post("/call/create-web-call", response_model=WebCallResponse)
-def create_web_call(
+async def create_web_call(
     payload: WebCallCreateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -2303,17 +2303,54 @@ def create_web_call(
         )
     # Generate unique call_id and access_token
     call_id = uuid.uuid4().hex
-    access_token = uuid.uuid4().hex
+    print(f"Creating web call with ID 🔥: {call_id}")
+    # 🔥 LiveKit credentials from .env
+    LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
+    LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
+    LIVEKIT_URL = os.getenv("LIVEKIT_URL")
 
+    if not (LIVEKIT_API_KEY and LIVEKIT_API_SECRET and LIVEKIT_URL):
+        raise HTTPException(status_code=500, detail="LiveKit credentials not configured")
+
+    # 🔥 Create LiveKit Room
+    lkapi = api.LiveKitAPI(
+        url=LIVEKIT_URL,
+        api_key=LIVEKIT_API_KEY,
+        api_secret=LIVEKIT_API_SECRET
+    )
+    try:
+        lkapi.room.create_room(
+            api.CreateRoomRequest(
+                name=call_id,  # Use call_id as room name
+                empty_timeout=10 * 60,  # 10 minutes timeout
+                max_participants=10
+            )
+        )
+        print(f"LiveKit Room '{call_id}' created successfully.")
+    except Exception as e:
+        if "already exists" not in str(e):
+            raise HTTPException(status_code=500, detail=f"LiveKit Error: {e}")
+
+    # 🔥 Generate LiveKit Access Token
+    token = api.AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET) \
+        .with_identity(f"user_{current_user.id}") \
+        .with_name(current_user.username or f"User {current_user.id}") \
+        .with_grants(api.VideoGrants(
+            room_join=True,
+            room=call_id
+        ))
+   
     # Create WebCall DB record
     new_web_call = WebCall(
         call_type="web_call",
         call_id=call_id,  # ✅ Set call_id here
-        access_token=access_token,
+        access_token=token.to_jwt(),
         agent_id=agent.id,
         agent_version=agent.version,
         call_status="registered",
-        call_metadata={},
+        call_metadata={
+        "livekit_url": LIVEKIT_URL
+        },
         retell_llm_dynamic_variables={},
         collected_dynamic_variables={},
         custom_sip_headers={},
@@ -2331,7 +2368,7 @@ def create_web_call(
         end_timestamp=None,
         duration_ms=None,
         transcript=None,
-        transcript_object=[],
+        transcript_object={},
         transcript_with_tool_calls=[],
         recording_url=None,
         public_log_url=None,
@@ -2346,6 +2383,24 @@ def create_web_call(
     db.add(new_web_call)
     db.commit()
     db.refresh(new_web_call)
+
+    # 🔥 Dispatch agent to the room
+    try:
+        dispatch = await lkapi.agent_dispatch.create_dispatch(
+            api.CreateAgentDispatchRequest(
+                room=call_id,
+                agent_name="ankit",
+                metadata=json.dumps({
+                    "agent_id": agent.id
+                })
+            )
+        )
+        print(f"✅ Agent dispatched to room '{call_id}' with Dispatch ID: {dispatch.id}")
+    except Exception as e:
+        print(f"⚠️ Failed to dispatch agent: {e}")
+        raise HTTPException(status_code=500, detail=f"Dispatch Error: {e}")
+    finally:
+        await lkapi.aclose()
 
     data = WebCallResponse(
         call_type=new_web_call.call_type,
@@ -2382,6 +2437,79 @@ def create_web_call(
         content={
             "status": True,
             "message": "Web call created successfully",
+            "data": data
+        }
+    )
+
+
+@router.get("/get-webcall/{call_id}", response_model=WebCallResponse)
+def get_web_call_by_id(
+    call_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Fetch WebCall record from DB
+    web_call = db.query(WebCall).filter(WebCall.call_id == call_id).first()
+    # Fetch agent details from pbx_ai_agent table
+    agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == web_call.agent_id).first()
+   
+    if not agent:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": False,
+                "message": "Agent not found",
+                "data": None
+            }
+        )
+    
+    if not web_call:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": False,
+                "message": "WebCall not found",
+                "data": None
+            }
+        )
+       
+
+    # Prepare response
+    data = WebCallResponse(
+        call_type=web_call.call_type,
+        access_token=web_call.access_token,
+        call_id=web_call.call_id,
+        agent_id=web_call.agent_id,
+        agent_name=agent.name if agent.name else None,  # Assuming relationship
+        agent_version=web_call.agent_version,
+        call_status=web_call.call_status,
+        call_metadata=web_call.call_metadata,
+        retell_llm_dynamic_variables=web_call.retell_llm_dynamic_variables,
+        collected_dynamic_variables=web_call.collected_dynamic_variables,
+        custom_sip_headers=web_call.custom_sip_headers,
+        opt_out_sensitive_data_storage=web_call.opt_out_sensitive_data_storage,
+        opt_in_signed_url=web_call.opt_in_signed_url,
+        start_timestamp=web_call.start_timestamp,
+        end_timestamp=web_call.end_timestamp,
+        duration_ms=web_call.duration_ms,
+        transcript=web_call.transcript,
+        transcript_object=web_call.transcript_object,
+        transcript_with_tool_calls=web_call.transcript_with_tool_calls,
+        recording_url=web_call.recording_url,
+        public_log_url=web_call.public_log_url,
+        knowledge_base_retrieved_contents_url=web_call.knowledge_base_retrieved_contents_url,
+        latency=web_call.latency,
+        disconnection_reason=web_call.disconnection_reason,
+        call_analysis=web_call.call_analysis,
+        call_cost=web_call.call_cost,
+        llm_token_usage=web_call.llm_token_usage
+    ).dict()
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": True,
+            "message": "WebCall fetched successfully",
             "data": data
         }
     )

@@ -1,21 +1,19 @@
-import logging, os, re, json
+import logging, os, re, json, time, httpx
 import numpy as np
 from typing import AsyncIterable, Optional
 from dataclasses import dataclass
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
 from openai import OpenAI
-from livekit import rtc
+from livekit import rtc, api
 from livekit.agents import (
-    JobContext, WorkerOptions, cli, function_tool,
+    JobContext, WorkerOptions, cli, function_tool, get_job_context,
     BackgroundAudioPlayer, AudioConfig, BuiltinAudioClip,
     UserInputTranscribedEvent, RunContext, AgentSession, Agent, RoomInputOptions, ModelSettings, function_tool, utils
 )
 from livekit.plugins import deepgram, openai, silero, noise_cancellation,elevenlabs
-from models.models import KnowledgeFile, PBXLLM, pbx_ai_agent
+from models.models import KnowledgeFile, PBXLLM, pbx_ai_agent, WebCall
 from db.database import engine
-import httpx
-import time
 
 # agent knowledgebase done
 # voice control done
@@ -77,7 +75,6 @@ def build_tts(agent):
             api_key=os.getenv("ELEVENLABS_API_KEY")
         )
     else:
-        print("print else tts:")
         return elevenlabs.TTS(
             voice_id="21m00Tcm4TlvDq8ikWAM",
             api_key=os.getenv("ELEVENLABS_API_KEY")
@@ -125,8 +122,7 @@ def retrieve_kb_context(query: str, kb_id: str, top_k: int = 3) -> str:
         session.close()
     top_chunks = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
     return "\n\n".join(chunk for _, chunk in top_chunks)
-from livekit.agents import get_job_context
-from livekit import api
+
 async def hangup_call():
     ctx = get_job_context()
     if ctx is None:
@@ -255,11 +251,7 @@ class Assistant(Agent):
             await current_speech.wait_for_playout()
 
         await hangup_call()
-    # @function_tool
-    # async def end_call(self, ctx: RunContext[UserData]):     
-    #     if ctx.userdata.ctx:
-    #         ctx.userdata.ctx.shutdown()
-
+   
     @function_tool
     async def transfer_to_human(self):       
         await self.session.say("Transferring you to a human representative. Please hold.")
@@ -269,17 +261,12 @@ class Assistant(Agent):
 async def entrypoint(ctx: JobContext):
     metadata = json.loads(ctx.job.metadata)
     agent_id = metadata.get("agent_id")
-    # agent_id = ctx.job.metadata  # Pass agent_id via job metadata
-    # print(f"Starting job with agent_id: {agent_id}")
+   
     agent, llm = get_agent_and_llm(agent_id)
-    # print(f"Agent: {agent.name}, LLM: {llm.model}") 
 
     stt = build_stt(llm.s2s_model, language=agent.language or "en")
-    # print(f"STT Model: {llm.model}")
     tts = build_tts(agent)
-    # print(f"TTS Model: {agent.voice_id}")
     llm_plugin = build_llm(llm)
-    # print(f"LLM Model: {llm.model} Temp: {llm.model_temperature})")
     begin_message=llm.begin_message
     persona = llm.general_prompt
     kb_ids = llm.knowledge_base_ids or []
@@ -295,41 +282,14 @@ async def entrypoint(ctx: JobContext):
         llm=llm_plugin,
         vad=silero.VAD.load(),
     )
-    # raw_metadata = ctx.room.metadata
-    # if not isinstance(raw_metadata, str) or not raw_metadata.strip():
-    #     raw_metadata = os.getenv("ROOM_METADATA", "{}")
-   
-    # try:
-    #     if isinstance(raw_metadata, str):
-    #         metadata = json.loads(raw_metadata)
-    #     else:
-    #         metadata = json.loads(str(raw_metadata))
-    #     kb_id = metadata.get("kb_id", "Not provided")
-    # except Exception as e:
-    #     print(f"⚠️ Failed to parse metadata: {e}")
-    #     kb_id = None
-
-    # if not kb_id or kb_id == "Not provided":
-    #     print("❌ kb_id not provided in room metadata.")
-    #     return
-
     
-    # session = AgentSession(
-    #     userdata=userdata,
-    #     vad=silero.VAD.load(),
-    #     stt=openai.STT(use_realtime=True,language="en"),
-    #     llm=openai.LLM(model="gpt-4o-mini"),
-    #     tts=elevenlabs.TTS(api_key=os.getenv("ELEVENLABS_API_KEY")),
-       
-    # )   
-
     agent = Assistant()
 
     @session.on("user_input_transcribed")
     def on_transcribed(event: UserInputTranscribedEvent):
         if event.is_final:
             agent.transcript_log.append(f"User: {event.transcript}")
-            print(f"[📝 Transcript] {event.transcript}")
+           
 
     async def analyze_chat(session_history: dict) -> dict:
         """
@@ -393,64 +353,36 @@ async def entrypoint(ctx: JobContext):
             }
     from datetime import datetime
     async def write_transcript():
-        current_date = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # This example writes to the temporary directory, but you can save to any location
-        filename = f"transcript_{ctx.room.name}_{current_date}.json"
-        
-        with open(filename, 'w') as f:
-            json.dump(session.history.to_dict(), f, indent=2)
+        try:
             
-        print(f"Transcript for {ctx.room.name} saved to {filename}")
+            db = SessionLocal()
+            # Get the call_id from the room name or metadata
+            call_id = ctx.room.name  # Assuming room.name == call_id
+
+            # Fetch WebCall record
+            web_call = db.query(WebCall).filter(WebCall.call_id == call_id).first()
+            if not web_call:
+                return
+
+            # Save transcript data
+            transcript_data = session.history.to_dict()
+            web_call.transcript_object = transcript_data
+            web_call.transcript = "\n".join([
+                f"{'Agent' if msg['role'] == 'assistant' else 'User'}: {msg['content'][0]}"
+                for msg in transcript_data.get('items', [])
+                if msg['type'] == 'message' and 'content' in msg and msg['content']
+            ])
+            web_call.updated_at = int(time.time() * 1000)
+
+            db.commit()
+
+        except Exception as e:
+            print(f"Error saving transcript to DB: {e}")
+        finally:
+            db.close()
 
     ctx.add_shutdown_callback(write_transcript)
-    # ✅ Save transcript to file at shutdown
-    # async def write_transcript():
-    #     try:
-    #         session_dict = session.history.to_dict()
-    #         chat_analysis = await analyze_chat(session_dict)
-    #         payload = {
-    #         "agent_id": "57e1ba83f1924ab6",
-    #         "agent_version": 0,
-    #         "chat_status": "ended",
-    #         "retell_llm_dynamic_variables": {
-    #             "customer_name": "John Doe"
-    #         },
-    #         "metadata": {},
-    #         "start_timestamp": session.userdata.start_timestamp,
-    #         "end_timestamp": int(time.time() * 1000),
-    #         "transcript": "\n".join(
-    #     f"{item['role'].capitalize()}: {' '.join(item['content'])}"
-    #     for item in session.history.to_dict().get("items", [])
-    # ),
-    #         "chat_cost": {
-    #             "product_costs": [
-    #                 {
-    #                     "product": metadata.get("model_llm", "gpt-4o-mini"),
-    #                     "unitPrice": 1,
-    #                     "cost": 50
-    #                 }
-    #             ],
-    #             "combined_cost": 50
-    #         },
-    #         "chat_analysis": chat_analysis
-    #     }
-
-       
-    #         async with httpx.AsyncClient(timeout=5.0) as client:
-               
-    #             AUTH_TOKEN=os.getenv('AUTH_TOKEN')
-    #             response = await client.post(
-    #                 url=os.getenv("CHAT_API_URL", "http://localhost:8000/create-chat"),
-    #                 json=payload,
-    #                 headers={"Authorization": f"Bearer {AUTH_TOKEN}"}
-    #             )
-    #             response.raise_for_status()
-         
-    #     except Exception as e:
-    #         print(f"❌ Failed to write transcript: {e}")
-
-    # ctx.add_shutdown_callback(write_transcript)
+    
    
 
     # Optional: Background audio

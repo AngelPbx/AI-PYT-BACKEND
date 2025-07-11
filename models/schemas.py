@@ -422,31 +422,66 @@ class CallCost(BaseModel):
     combined_cost: int
 
 
+# class WebCallResponse(BaseModel):
+#     call_type: str
+#     access_token: str
+#     call_id: str
+#     agent_id: str
+#     agent_name: Optional[str]
+#     agent_version: Optional[int]
+#     call_status: str
+#     call_metadata: Optional[Dict[str, Any]]
+#     retell_llm_dynamic_variables: Optional[Dict[str, str]]
+#     collected_dynamic_variables: Optional[Dict[str, Any]]
+#     custom_sip_headers: Optional[Dict[str, str]]
+#     opt_out_sensitive_data_storage: bool
+#     opt_in_signed_url: bool
+#     start_timestamp: Optional[int]
+#     end_timestamp: Optional[int]
+#     duration_ms: Optional[int]
+#     transcript: Optional[str]
+#     transcript_object: Optional[List[Dict[str, Any]]] = {}
+#     transcript_with_tool_calls: Optional[List[Dict[str, Any]]]
+#     recording_url: Optional[str]
+#     public_log_url: Optional[str]
+#     knowledge_base_retrieved_contents_url: Optional[str]
+#     latency: Optional[Dict[str, Any]]
+#     disconnection_reason: Optional[str]
+#     call_analysis: Optional[CallAnalysis]
+#     call_cost: Optional[CallCost]
+#     llm_token_usage: Optional[Dict[str, Any]]
+
 class WebCallResponse(BaseModel):
     call_type: str
     access_token: str
     call_id: str
     agent_id: str
-    agent_name: Optional[str]
-    agent_version: Optional[int]
+    agent_name: Optional[str] = None
+    agent_version: Optional[int] = None
     call_status: str
-    call_metadata: Optional[Dict[str, Any]]
-    retell_llm_dynamic_variables: Optional[Dict[str, str]]
-    collected_dynamic_variables: Optional[Dict[str, Any]]
-    custom_sip_headers: Optional[Dict[str, str]]
+    call_metadata: Optional[Dict[str, Any]] = {}
+    retell_llm_dynamic_variables: Optional[Dict[str, str]] = {}
+    collected_dynamic_variables: Optional[Dict[str, Any]] = {}
+    custom_sip_headers: Optional[Dict[str, str]] = {}
     opt_out_sensitive_data_storage: bool
     opt_in_signed_url: bool
-    start_timestamp: Optional[int]
-    end_timestamp: Optional[int]
-    duration_ms: Optional[int]
-    transcript: Optional[str]
-    transcript_object: Optional[List[Dict[str, Any]]]
-    transcript_with_tool_calls: Optional[List[Dict[str, Any]]]
-    recording_url: Optional[str]
-    public_log_url: Optional[str]
-    knowledge_base_retrieved_contents_url: Optional[str]
-    latency: Optional[Dict[str, Any]]
-    disconnection_reason: Optional[str]
-    call_analysis: Optional[CallAnalysis]
-    call_cost: Optional[CallCost]
-    llm_token_usage: Optional[Dict[str, Any]]
+    start_timestamp: Optional[int] = None
+    end_timestamp: Optional[int] = None
+    duration_ms: Optional[int] = None
+    transcript: Optional[str] = None
+
+    # 👇 Change to Dict since you're saving full JSON
+    transcript_object: Optional[Dict[str, Any]] = {}
+
+    transcript_with_tool_calls: Optional[List[Dict[str, Any]]] = []
+    recording_url: Optional[str] = None
+    public_log_url: Optional[str] = None
+    knowledge_base_retrieved_contents_url: Optional[str] = None
+    latency: Optional[Dict[str, Any]] = {}
+    disconnection_reason: Optional[str] = None
+    call_analysis: Optional[CallAnalysis] = None
+    call_cost: Optional[CallCost] = None
+    llm_token_usage: Optional[Dict[str, Any]] = {}
+
+    class Config:
+        orm_mode = True
