@@ -1601,6 +1601,71 @@ def get_agent(
         }
     )
 
+@router.patch("/agent/update-agent/{agent_id}")
+def update_agent(
+    agent_id: str,
+    payload: AgentCreate,  # Or create a separate AgentUpdate schema if fields are optional
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 🔥 Fetch agent
+    agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    # ✅ Check workspace access
+    if not is_user_in_workspace(current_user.id, agent.workspace_id, db):
+        raise HTTPException(status_code=403, detail="You do not have access to this workspace")
+
+    # 🔄 Update only provided fields
+    update_data = payload.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(agent, field, value)
+
+    agent.last_modification_timestamp = int(time.time() * 1000)
+
+    db.commit()
+    db.refresh(agent)
+
+    response_data = {
+        "agent_id": f"{agent.id}",
+        "last_modification_timestamp": agent.last_modification_timestamp,
+        "agent_name": agent.name,
+        "response_engine": agent.response_engine,
+        "language": agent.language,
+        "opt_out_sensitive_data_storage": agent.opt_out_sensitive_data_storage,
+        "opt_in_signed_url": agent.opt_in_signed_url,
+        "end_call_after_silence_ms": agent.end_call_after_silence_ms,
+        "version": agent.version,
+        "is_published": agent.is_published,
+        "post_call_analysis_model": agent.post_call_analysis_model,
+        "voice_id": agent.voice_id,
+        "voice_model": agent.voice_model,
+        "voice_temperature": agent.voice_temperature,
+        "voice_speed": agent.voice_speed,
+        "volume": agent.volume,
+        "enable_backchannel": agent.enable_backchannel,
+        "backchannel_frequency": agent.backchannel_frequency,
+        "reminder_trigger_ms": agent.reminder_trigger_ms,
+        "reminder_max_count": agent.reminder_max_count,
+        "max_call_duration_ms": agent.max_call_duration_ms,
+        "interruption_sensitivity": agent.interruption_sensitivity,
+        "ambient_sound_volume": agent.ambient_sound_volume,
+        "responsiveness": agent.responsiveness,
+        "normalize_for_speech": agent.normalize_for_speech,
+        "begin_message_delay_ms": agent.begin_message_delay_ms,
+        "ring_duration_ms": agent.ring_duration_ms,
+        "stt_mode": agent.stt_mode,
+        "allow_user_dtmf": agent.allow_user_dtmf,
+        "user_dtmf_options": agent.user_dtmf_options,
+        "denoising_mode": agent.denoising_mode
+    }
+
+    return {
+        "status": True,
+        "message": "Agent updated successfully",
+        "data": response_data
+    }
 # PBX LLM APIs--------------------------------------------------
 
 @router.post("/pbx-llms", response_model=PBXLLMOut)
@@ -2537,3 +2602,4 @@ def map_country_prefix(countries: List[Country]):
         prefix = country_prefix_codes.get(country.country_code)
         result.append(CountryWithPrefix(**country.dict(), prefix_code=prefix))
     return result
+
