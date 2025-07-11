@@ -485,3 +485,94 @@ class WebCallResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+class UsageModel(BaseModel):
+    Voice: Optional[int] = 0
+    Text: Optional[int] = 0
+    Fax: Optional[int] = 0
+    Emergency: Optional[int] = 0
+    AI: Optional[int] = 0
+
+class TwilioSearchRequest(BaseModel):
+    searchType: str
+    npa: Optional[str] = None
+    nxx: Optional[str] = None
+    country: Optional[str] = "US"
+    quantity: Optional[int] = 10
+    companyId: Optional[int] = None
+    usage: Optional[UsageModel] = UsageModel()
+    price: Optional[str] = None
+    vendorId: Optional[int] = None
+class PhoneNumberResponse(BaseModel):
+    phone_number: str
+    friendly_name: Optional[str]
+    iso_country: Optional[str]
+    region: Optional[str]
+    postal_code: Optional[str]
+    lata: Optional[str]
+    rate_center: Optional[str]
+    currency: str
+    price: Optional[str]
+    didSummary: str
+    vendorId: Optional[int]
+class SearchNumbersResponse(BaseModel):
+    status: bool
+    message: str
+    data: Optional[list[PhoneNumberResponse]]
+class UsageFlags(BaseModel):
+    Voice: Optional[bool] = False
+    Text: Optional[bool] = False
+    Fax: Optional[bool] = False
+    Emergency: Optional[bool] = False
+    AI: Optional[bool] = False
+    Mms: Optional[bool] = False  
+class SearchNumbersRequest(BaseModel):
+    searchType: str = Field(..., description="Type of number to search for (e.g. 'tollfree', 'domestic')")
+    npa: Optional[str] = Field(None, description="Area code or number pattern")
+    nxx: Optional[str] = Field(None, description="Exchange pattern")
+    country: Optional[str] = Field("US", description="Country code, e.g. 'US'")
+    quantity: int = Field(..., description="Number of results to fetch")
+    companyId: Optional[int] = Field(None, description="Optional company ID")
+    usage: Optional[UsageFlags] = Field(None, description="Desired features like Voice, Text, Fax, etc.")
+    price: Optional[str] = Field(None, description="Optional price to attach to response")
+    vendorId: Optional[int] = Field(None, description="Optional vendor ID")
+    
+class CountryData(BaseModel):
+    country: str
+    country_code: str
+    prefix_code: Optional[str] = None
+    subresource_uris: Optional[dict] = None
+
+class AvailableCountriesResponse(BaseModel):
+    status: bool
+    message: str
+    data: List[CountryData]
+    total: int
+    
+class PurchaseDidRequest(BaseModel):
+    vendorId: int
+    companyId: int
+    dids: list[dict]  # e.g. [{"did": "+1234567890"}]
+    type: str  # 'configure' or other
+    rate: float
+    created_by: int
+
+class PurchaseDidResponse(BaseModel):
+    status: bool
+    message: str
+    
+class PurchaseDIDsRequest(BaseModel):
+    vendorId: int = Field(..., alias="vendorId")
+    companyId: int = Field(..., alias="companyId")
+    type: Optional[str] = None
+    rate: Optional[float] = None
+    created_by: Optional[int] = None
+    dids: List[dict] = []
+
+class BasicResponse(BaseModel):
+    status: bool
+    message: str
+    
+class DIDItem(BaseModel):
+    did: str
+    
