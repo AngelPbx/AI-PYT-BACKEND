@@ -50,15 +50,30 @@ def get_agent_and_llm(agent_id: str):
     finally:
         db.close()
 
+def build_stt(s2s_model: str = None, language: str = "en"):
+    """Dynamically build STT engine based on model"""
+    # Fallback to whisper if s2s_model is None
+    if not s2s_model:
+        return openai.STT(language=language)
 
-def build_stt(s2s_model, language="en"):
-    """Dynamically build STT"""
+    s2s_model = s2s_model.lower()
+
     if "whisper" in s2s_model:
         return openai.STT(language=language)
     elif "deepgram" in s2s_model:
         return deepgram.STT(model=s2s_model)
     else:
+        # Default to Whisper as fallback
         return openai.STT(language=language)
+
+# def build_stt(s2s_model, language="en"):
+#     """Dynamically build STT"""
+#     if "whisper" in s2s_model:
+#         return openai.STT(language=language)
+#     elif "deepgram" in s2s_model:
+#         return deepgram.STT(model=s2s_model)
+#     else:
+#         return openai.STT(language=language)
 
 
 def build_tts(agent):
