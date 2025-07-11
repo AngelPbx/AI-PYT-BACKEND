@@ -284,101 +284,6 @@ def update_user(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
-# @router.put("/user/update")
-# def update_user(
-#     user_data: UpdateUser,
-#     db: Session = Depends(get_db),
-#     current_user: User = Depends(get_current_user)
-# ):
-#     try:
-#         existing_user = db.query(User).filter(User.id == current_user.id).first()
-#         if not existing_user:
-#             return format_response(
-#                 status=False,
-#                 message="User not found",
-#                 errors=[{"field": "user", "message": "User not found"}]
-#             )
-
-#         updated = False
-#         errors = []
-
-#         # Update username
-#         if user_data.username and user_data.username != existing_user.username:
-#             username_exists = db.query(User).filter(User.username == user_data.username).first()
-#             if username_exists:
-#                 errors.append({
-#                     "field": "username",
-#                     "message": "Username already taken"
-#                 })
-#             else:
-#                 existing_user.username = user_data.username
-#                 updated = True
-
-#         # Update email
-#         if user_data.email and user_data.email != existing_user.email:
-#             try:
-#                 validate_email(user_data.email)
-#             except Exception as e:
-#                 errors.append({
-#                     "field": "email",
-#                     "message": str(e)
-#                 })
-#             else:
-#                 email_exists = db.query(User).filter(User.email == user_data.email).first()
-#                 if email_exists:
-#                     errors.append({
-#                         "field": "email",
-#                         "message": "Email already registered"
-#                     })
-#                 else:
-#                     existing_user.email = user_data.email
-#                     updated = True
-
-#         # Update password
-#         if user_data.password:
-#             try:
-#                 validate_password(user_data.password)
-#             except Exception as e:
-#                 errors.append({
-#                     "field": "password",
-#                     "message": str(e)
-#                 })
-#             else:
-#                 existing_user.hashed_password = hash_password(user_data.password)
-#                 updated = True
-
-#         if errors:
-#             return format_response(
-#                 status=False,
-#                 message="Validation or conflict error",
-#                 errors=errors
-#             )
-
-#         if not updated:
-#             return format_response(
-#                 status=False,
-#                 message="No valid fields provided for update",
-#                 errors=[{"field": "update", "message": "Nothing to update"}]
-#             )
-
-#         db.commit()
-
-#         return format_response(
-#             status=True,
-#             message="User details updated successfully",
-#             data={}
-#         )
-
-#     except Exception as e:
-#         db.rollback()
-#         return format_response(
-#             status=False,
-#             message="Internal Server Error",
-#             errors=[{"field": "server", "message": str(e)}]
-#         )
-
-
-# Helper to format responses
 
 @router.post("/create-room-token")
 async def create_room_and_token(
@@ -451,23 +356,6 @@ async def create_room_and_token(
             ))
         jwt_token = token.to_jwt()
         return jwt_token
-
-        # return format_response(
-        #     status=True,
-        #     message="Room and token created successfully",
-        #     data={
-        #         "room": request.room_name,
-        #         "token": "Bearer " + jwt_token,
-        #         "metadata": request.metadata,
-        #         "agent": {
-        #             "id": agent.id,
-        #             "name": agent.name,
-        #             "voice_model": agent.voice_model,
-        #             "language": agent.language,
-        #             "response_engine": agent.response_engine
-        #         }
-        #     }
-        # )
 
     except HTTPException as he:
         raise he
@@ -568,7 +456,6 @@ def create_workspace(data: WorkspaceCreate, db: Session = Depends(get_db), curre
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
-
 
 @router.get("/workspaces")
 def list_workspaces(
@@ -1216,7 +1103,6 @@ def delete_knowledge_file(
             errors=[{"field": "server", "message": str(e)}],
             status_code=500
         )
-
     
 @router.get("/workspaces/{workspace_id}/settings")
 def get_workspace_settings(
@@ -1595,7 +1481,6 @@ def create_agent(
         "data": response_data
     }
 
-
 @router.get("/all-agents/{workspace_id}")
 def list_my_agents(
     workspace_id: int,
@@ -1675,7 +1560,6 @@ def list_my_agents(
             data=None
         )
 
-
 @router.get("/agents/{agent_id}", response_model=APIResponse)
 def get_agent(
     agent_id: str,
@@ -1716,9 +1600,6 @@ def get_agent(
             "data": AgentOut.from_orm(agent).model_dump()           
         }
     )
-
-
-
 
 # PBX LLM APIs--------------------------------------------------
 
@@ -1850,7 +1731,6 @@ def get_pbx_llm(
             status_code=500
         )
 
-
 # Chat room APIs--------------------------------------------------
 @router.post("/create-chat", response_model=CreateChatResponse)
 def create_chat(payload: CreateChatRequest, db: Session = Depends(get_db)):
@@ -1919,63 +1799,6 @@ def get_voice(
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
     return voice
-
-
-# @router.get("/all-voices", response_model=List[VoiceOut])
-# def list_voices(
-#     current_user: User = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     try:
-#         voices_data = [
-#             {
-#                 "voice_id": "openai-shimmer",
-#                 "voice_name": "Shimmer",
-#                 "provider": "elevenlabs",
-#                 "gender": "female",
-#                 "accent": "Neutral",
-#                 "age": "Adult",
-#                 "preview_audio_url": "https://example.com/previews/shimmer.mp3"
-#             },
-#             {
-#                 "voice_id": "elevn-echo",
-#                 "voice_name": "Echo",
-#                 "provider": "elevenlabs",
-#                 "gender": "male",
-#                 "accent": "British",
-#                 "age": "Middle-aged",
-#                 "preview_audio_url": "https://example.com/previews/echo.mp3"
-#             },
-#             {
-#                 "voice_id": "elevn-nova",
-#                 "voice_name": "Nova",
-#                 "provider": "elevenlabs",
-#                 "gender": "female",
-#                 "accent": "American",
-#                 "age": "Young Adult",
-#                 "preview_audio_url": "https://example.com/previews/nova.mp3"
-#             },
-#             {
-#                 "voice_id": "elevn-pulse",
-#                 "voice_name": "Pulse",
-#                 "provider": "elevenlabs",
-#                 "gender": "male",
-#                 "accent": "Australian",
-#                 "age": "Adult",
-#                 "preview_audio_url": "https://example.com/previews/pulse.mp3"
-#             }
-#         ]
-#         # Convert to VoiceOut objects and return as a list
-#         return [VoiceOut.model_validate(voice) for voice in voices_data]
-#     except Exception as e:
-#         raise HTTPException(
-#             status_code=500,
-#             detail={
-#                 "status": False,
-#                 "message": "Internal Server Error",
-#                 "errors": [{"field": "server", "message": str(e)}]
-#             }
-#         )
 
 @router.get("/all-voices", response_model=APIResponse)
 def list_voices(
@@ -2113,95 +1936,6 @@ def list_phone_numbers(
     current_user: User = Depends(get_current_user)  # optional
 ):
     return db.query(ImportedPhoneNumber).all()
-
-# @router.get("/auth/github/login")
-# async def github_login(request: Request):
-#     redirect_uri = request.url_for("github_callback")
-#     return await oauth.github.authorize_redirect(request, redirect_uri)
-
-# @router.get("/auth/github/callback")
-# async def github_callback(request: Request, db: Session = Depends(get_db)):
-#     try:
-#         token = await oauth.github.authorize_access_token(request)
-#         github_user = await oauth.github.get('user', token=token)
-#         github_user = github_user.json()
-
-#         username = github_user["login"]
-#         email = github_user.get("email")
-
-#         if not email:
-#             # GitHub may hide public email, so fetch from email endpoint
-#             emails = await oauth.github.get('user/emails', token=token)
-#             email_list = emails.json()
-#             email = next((item["email"] for item in email_list if item["primary"] and item["verified"]), None)
-
-#         if not email:
-#             raise HTTPException(status_code=400, detail="Email not available from GitHub")
-
-#         user = db.query(User).filter(User.email == email).first()
-
-#         if not user:
-#             # Create new user
-#             user = User(
-#                 username=username,
-#                 email=email,
-#                 full_name=github_user.get("name") or username,
-#                 hashed_password="",
-#                 created_at=datetime.utcnow(),
-#                 updated_at=datetime.utcnow()
-#             )
-#             db.add(user)
-#             db.commit()
-#             db.refresh(user)
-
-#             # Create workspace and membership
-#             workspace = Workspace(
-#                 name=f"{username}_workspace",
-#                 description="Default workspace",
-#                 owner_id=user.id,
-#                 created_at=datetime.utcnow()
-#             )
-#             db.add(workspace)
-#             db.commit()
-#             db.refresh(workspace)
-
-#             settings = WorkspaceSettings(
-#                 workspace_id=workspace.id,
-#                 default_model="gpt-4",
-#                 default_voice="echo",
-#                 temperature=1
-#             )
-#             member = WorkspaceMember(
-#                 user_id=user.id,
-#                 workspace_id=workspace.id,
-#                 role="owner"
-#             )
-#             db.add_all([settings, member])
-#             db.commit()
-
-#         # Issue JWT token
-#         token, expire = create_token({
-#             "username": user.username,
-#             "expire_minutes": os.getenv("TOKEN_EXPIRE_MINUTES", 60)
-#         })
-
-#         return format_response(
-#             status=True,
-#             message="GitHub login successful",
-#             data={
-#                 "token": "Bearer " + token,
-#                 "expires_at": expire.isoformat() + "Z",
-#                 "expire_duration_minutes": int(os.getenv("TOKEN_EXPIRE_MINUTES", 60)),
-#             }
-#         )
-
-#     except Exception as e:
-#         db.rollback()
-#         return format_response(
-#             status=False,
-#             message="GitHub login failed",
-#             errors=[{"field": "server", "message": str(e)}]
-#         )
 
 @router.get("/list-phone-numbers")
 def list_phone_numbers(
@@ -2444,7 +2178,6 @@ async def create_web_call(
         }
     )
 
-
 @router.get("/get-webcall/{call_id}", response_model=WebCallResponse)
 def get_web_call_by_id(
     call_id: str,
@@ -2516,83 +2249,6 @@ def get_web_call_by_id(
             "data": data
         }
     )
-
-    
-# @router.get("/twilio/countries", response_model=List[CountryOut])
-# def get_available_countries():
-#     countries = twilio_client.available_phone_numbers.list(limit=100)
-#     return [{"country_code": c.country_code, "country": c.friendly_name} for c in countries]
-
-
-# @router.get("/twilio/local-numbers", response_model=List[PhoneNumberOut])
-# def get_local_numbers(
-#     country: str = Query("US"),
-#     area_code: Optional[int] = None,
-#     contains: Optional[str] = None,
-#     limit: int = Query(20, le=100),
-# ):
-#     filters = {"limit": limit}
-#     if area_code:
-#         filters["area_code"] = area_code
-#     if contains:
-#         filters["contains"] = contains
-
-#     numbers = twilio_client.available_phone_numbers(country).local.list(**filters)
-#     return [{"friendly_name": n.friendly_name} for n in numbers]
-
-
-# @router.get("/twilio/tollfree-numbers", response_model=List[PhoneNumberOut])
-# def get_toll_free_numbers(
-#     country: str = Query("US"),
-#     contains: Optional[str] = None,
-#     limit: int = Query(20, le=100),
-# ):
-#     filters = {"limit": limit}
-#     if contains:
-#         filters["contains"] = contains
-
-#     numbers = twilio_client.available_phone_numbers(country).toll_free.list(**filters)
-#     return [{"friendly_name": n.friendly_name} for n in numbers]
-
-
-# @router.get("/twilio/mobile-numbers", response_model=List[PhoneNumberOut])
-# def get_mobile_numbers(
-#     country: str = Query("GB"),
-#     limit: int = Query(20, le=100),
-# ):
-#     numbers = twilio_client.available_phone_numbers(country).mobile.list(limit=limit)
-#     return [{"friendly_name": n.friendly_name} for n in numbers]
-    
-# @router.get("/twilio/available-countries")
-# def get_available_countries():
-#     countries = twilio_client.available_phone_numbers.list(limit=20)
-#     return [{"country_code": c.country_code, "country": c.friendly_name} for c in countries]
-
-# @router.get("/twilio/local-numbers")
-# def get_local_numbers(area_code: int = None, contains: str = None):
-#     filters = {"limit": 20}
-#     if area_code:
-#         filters["area_code"] = area_code
-#     if contains:
-#         filters["contains"] = contains
-
-#     numbers = twilio_client.available_phone_numbers("US").local.list(**filters)
-#     return [n.friendly_name for n in numbers]
-
-
-# @router.get("/twilio/toll-free-numbers")
-# def get_toll_free_numbers(contains: str = None):
-#     filters = {"limit": 20}
-#     if contains:
-#         filters["contains"] = contains
-
-#     numbers = twilio_client.available_phone_numbers("US").toll_free.list(**filters)
-#     return [n.friendly_name for n in numbers]
-
-# @router.get("/twilio/mobile-numbers")
-# def get_mobile_numbers(country: str = "GB"):
-#     numbers = twilio_client.available_phone_numbers(country).mobile.list(limit=20)
-#     return [n.friendly_name for n in numbers]
 
 @router.post("/twilio/search-numbers", response_model=SearchNumbersResponse)
 async def search_numbers(request: SearchNumbersRequest):
@@ -2765,84 +2421,6 @@ async def available_countries():
                 "error": str(e)
             }
         )
-        
-# @router.post("/twilio/purchase-did", response_model=PurchaseDidResponse)
-# async def purchase_did_in_twilio(req: PurchaseDidRequest, db: Session = Depends(get_db)):
-#     if req.vendorId is None:
-#         raise HTTPException(status_code=400, detail={"status": False, "message": "Vendor ID is required"})
-    
-#     vendor = db.query(DidVendor).get(req.vendorId)
-#     if not vendor:
-#         raise HTTPException(status_code=400, detail={"status": False, "message": "Vendor not found"})
-    
-#     numbers = [d["did"] for d in req.dids]
-#     if not numbers:
-#         raise HTTPException(status_code=400, detail={"status": False, "message": "No DIDs provided"})
-    
-#     username = base64.b64decode(vendor.username).decode()
-#     auth_token = base64.b64decode(vendor.token).decode()
-#     friendly_name = f"Subaccount_{req.companyId}_tw"
-#     sub = db.query(TwilioSubAccounts).filter_by(account_id=req.companyId).first()
-    
-#     if sub is None and req.type == "configure":
-#         sub_data = await create_subaccount(username, auth_token, friendly_name, req.companyId)
-#         username = sub_data["data"]["sid"]
-#     else:
-#         username = sub.sid
-    
-#     phone = numbers[0]
-#     url = f"https://api.twilio.com/2010-04-01/Accounts/{username}/IncomingPhoneNumbers.json"
-#     payload = {"PhoneNumber": phone}
-    
-#     async with httpx.AsyncClient() as client:
-#         resp = await client.post(url, data=payload, auth=(username, auth_token))
-    
-#     if resp.status_code >= 400:
-#         detail = resp.json()
-#         raise HTTPException(status_code=400, detail={"status": False, "message": "Failed to purchase DID", "error": detail})
-    
-#     data = resp.json()
-#     purchased = data.get("phone_number")
-#     if not purchased:
-#         raise HTTPException(status_code=400, detail={"status": False, "message": "Failed to purchase DID", "error": data})
-    
-#     order_id = f"tw_{purchased}"
-#     status = data.get("status", "Pending")
-    
-#     # Save order status
-#     order = DidOrderStatus.create(db, account_id=req.companyId, vendor_id=req.vendorId, order_id=order_id, status=status)
-#     order.update_status("Completed" if purchased else "Failed")
-    
-#     domain = db.query(Domain).filter_by(account_id=req.companyId).first()
-#     caps = data.get("capabilities", {})
-    
-#     DidDetail.create(db,
-#         account_id=req.companyId,
-#         did_vendor_id=req.vendorId,
-#         orderid=order_id,
-#         sid=data.get("sid"),
-#         domain=domain.id if domain else None,
-#         did=purchased,
-#         cnam=False,
-#         sms=caps.get("sms", False),
-#         e911=False,
-#         price=req.rate,
-#         created_by=req.created_by
-#     )
-    
-#     # Configure trunk
-#     trunk_resp = await set_phone_trunk({
-#         'vendor_id': req.vendorId,
-#         'phone_number': purchased,
-#         'orderId': order_id,
-#         'username': username,
-#         'authtoken': auth_token,
-#         'sid': data.get("sid")
-#     })
-#     if not trunk_resp.status:
-#         raise HTTPException(status_code=500, detail={"status": False, "message": f"Unable to set trunks: {trunk_resp.message}"})
-    
-#     return {"status": True, "message": "Order Completed"}
 
 @router.post("/twilio/purchase-dids", response_model=BasicResponse)
 async def purchase_did_in_twilio(
@@ -2936,7 +2514,6 @@ async def purchase_did_in_twilio(
         raise HTTPException(status_code=500, detail=f"Unable to set trunks: {trunk_result['message']}")
 
     return BasicResponse(status=True, message="Order Completed")
-
 # --- Country prefix code map ---
 country_prefix_codes = {
     'DZ': '+213', 'AR': '+54', 'AU': '+61', 'AT': '+43', 'BB': '+1-246',
