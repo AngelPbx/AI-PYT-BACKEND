@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from jose import jwt
+from jose import jwt, JWTError, ExpiredSignatureError
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer
 from config.settings import SECRET_KEY, ALGORITHM
@@ -28,9 +28,9 @@ def decode_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except jwt.ExpiredSignatureError:
+    except ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
-    except jwt.InvalidTokenError:
+    except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
     except Exception as e:
         raise HTTPException(status_code=401, detail=f"Token error: {str(e)}")
