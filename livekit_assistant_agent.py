@@ -58,7 +58,7 @@ def build_stt(s2s_model, language="en"):
     elif "deepgram" in s2s_model:
         return deepgram.STT(model=s2s_model)
     else:
-        raise ValueError(f"Unsupported STT model: {s2s_model}")
+        return openai.STT(language=language)
 
 
 def build_tts(agent):
