@@ -505,7 +505,6 @@ class WebCallResponse(BaseModel):
     duration_ms: Optional[int] = None
     transcript: Optional[str] = None
 
-    # 👇 Change to Dict since you're saving full JSON
     transcript_object: Optional[Dict[str, Any]] = {}
 
     transcript_with_tool_calls: Optional[List[Dict[str, Any]]] = []
@@ -524,7 +523,7 @@ class WebCallResponse(BaseModel):
 # Pydantic models for request and response
 class PhoneNumberRequest(BaseModel):
     country_code: str = "US"
-    area_code: str | None = None
+    area_code: int | None = None
     sms_enabled: bool = True
     voice_enabled: bool = True
     webhook_url: str | None = None
