@@ -20,12 +20,12 @@ from twilio.rest import Client
 from sqlalchemy.orm import sessionmaker, Session
 from db.database import get_db, get_current_user
 from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, KnowledgeFile, APIKey, FileStatus, SourceStatus, 
-                           pbx_ai_agent, PBXLLM, ChatSession, LLMVoice, ImportedPhoneNumber, WebCall
+                           pbx_ai_agent, PBXLLM, ChatSession, LLMVoice, ImportedPhoneNumber, WebCall, PhoneNumber
                            )
 from models.schemas import ( UserSignup, UserLogin, UpdateUser,DispatchRequest,CreateRoomRequestSchema,WebCallResponse,WebCallCreateRequest,GetPBXLLMOut,
                                 WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, 
                                 CreateChatRequest, CreateChatResponse, VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut, APIResponse, PhoneNumberRequest, 
-                                Response, PhoneNumber
+                                Response
                      )
 from utils.helpers import (
     format_response, validate_email,
