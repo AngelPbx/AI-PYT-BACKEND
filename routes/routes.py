@@ -1802,11 +1802,7 @@ def create_agent(
     }
 
 
-<<<<<<< HEAD
 @router.delete("/agent/delete-agent/{agent_id}")
-=======
-@router.delete("/agent/delete-agent/{agent_id}", status_code=204)
->>>>>>> c6c15ca57a9c95114e09be3e8c43c43d36c7839b
 def delete_agent(
     agent_id: str,
     db: Session = Depends(get_db),
