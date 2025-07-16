@@ -1821,7 +1821,7 @@ def delete_agent(
 
     return {
         "status": True,
-        "message": f"Agent with id {agent_id} deleted successfully",
+        "message": f"Agent deleted successfully",
         "data": None
     }
 
