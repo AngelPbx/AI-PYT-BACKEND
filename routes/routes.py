@@ -5,8 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 from openai import OpenAI
 import httpx
-from fastapi import status
-from fastapi import Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter
+from fastapi import Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter, Header
 from utils.helpers import is_user_in_workspace, generate_api_key
 from sqlalchemy.orm import Session
 import uuid 
@@ -1803,7 +1802,11 @@ def create_agent(
     }
 
 
+<<<<<<< HEAD
 @router.delete("/agent/delete-agent/{agent_id}")
+=======
+@router.delete("/agent/delete-agent/{agent_id}", status_code=204)
+>>>>>>> c6c15ca57a9c95114e09be3e8c43c43d36c7839b
 def delete_agent(
     agent_id: str,
     db: Session = Depends(get_db),
@@ -2823,63 +2826,58 @@ def purchase_phone_number(
 ):
     try:
         # Step 1: Search for available phone numbers
-        available_numbers = client.available_phone_numbers(
-            data.country_code
-        ).local.list(
-            sms_enabled=data.sms_enabled,
-            voice_enabled=data.voice_enabled,
+        available_numbers = client.available_phone_numbers("US").local.list(
+            sms_enabled=True,
+            voice_enabled=True,
             area_code=data.area_code
         )
 
         if not available_numbers:
-            return {
-                "status": False,
-                "message": f"No available phone numbers found for country {data.country_code}",
-                "data": None,
-                "errors": [{"field": "phone_number", "message": "No available numbers"}]
-            }
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": False,
+                    "message": f"No available phone numbers found in area code {data.area_code}",
+                    "data": None,
+                    "errors": [{"field": "phone_number", "message": "No available numbers"}]
+                }
+            )
 
-        # Step 2: Select the first available number
+        # Step 2: Select and purchase number
         phone_number = available_numbers[0].phone_number
+        purchased_number = client.incoming_phone_numbers.create(phone_number=phone_number)
 
-        # Step 3: Purchase the phone number
-        purchased_number = client.incoming_phone_numbers.create(
-            phone_number=phone_number
-        )
+        # Step 3: Format number
+        national_number = phone_number[2:]  # remove '+1'
+        area_code = int(national_number[:3])
+        phone_number_pretty = f"+1 ({national_number[:3]}) {national_number[3:6]}-{national_number[6:]}"
 
-        # Step 4: Format area code and pretty phone number
-        # Assuming phone_number is in E.164 format, e.g., "+14157774444"
-        national_number = phone_number[2:]  # Remove "+1"
-        area_code = int(national_number[:3]) if data.country_code == "US" else 0  # Fallback to 0 for non-US
-        phone_number_pretty = f"+1 ({national_number[:3]}) {national_number[3:6]}-{national_number[6:]}" if data.country_code == "US" else phone_number
-
-        # Step 5: Save to database
+        # Step 4: Save to DB
         phone_number_db = PhoneNumber(
             phone_number=purchased_number.phone_number,
             phone_number_type="ucaas-twilio",
             phone_number_pretty=phone_number_pretty,
             area_code=area_code,
-            inbound_agent_id="xxxxx",  # Stored as-is in DB, overridden in response
-            outbound_agent_id="xxxxx",  # Stored as-is in DB, overridden in response
-            inbound_agent_version=1,    # Stored as-is in DB, overridden in response
-            outbound_agent_version=1,   # Stored as-is in DB, overridden in response
-            nickname="Frontdesk Number",  # Stored as-is in DB, overridden in response
-            inbound_webhook_url=data.webhook_url or "https://example.com/inbound-webhook",  # Stored as-is in DB, overridden in response
+            inbound_agent_id=data.inbound_agent_id,
+            outbound_agent_id=data.outbound_agent_id,
+            inbound_agent_version=data.inbound_agent_version or 1,
+            outbound_agent_version=1,
+            nickname=data.nickname,
+            inbound_webhook_url=data.inbound_webhook_url or "https://example.com/inbound-webhook",
             last_modification_timestamp=1703413636133,
             owner_id=current_user.id
         )
         db.add(phone_number_db)
 
-        # Step 6: Configure webhook if provided
-        if data.webhook_url:
+        if data.inbound_webhook_url:
             client.incoming_phone_numbers(purchased_number.sid).update(
-                sms_url=data.webhook_url
+                sms_url=data.inbound_webhook_url
             )
 
         db.commit()
         db.refresh(phone_number_db)
 
-        # Step 7: Return response
+        # Step 5: Return success
         return {
             "status": True,
             "message": "Phone number purchased",
@@ -2888,15 +2886,85 @@ def purchase_phone_number(
                 "phone_number_type": phone_number_db.phone_number_type,
                 "phone_number_pretty": phone_number_db.phone_number_pretty,
                 "area_code": phone_number_db.area_code,
-                "inbound_agent_id": None,
-                "inbound_agent_name": None,
-                "inbound_agent_version": None,
-                "inbound_webhook_url": None,
-                "nickname": "ucaas",
-                "number_provider": "twilio",
-                "outbound_agent_id": None,
-                "outbound_agent_version": None,
+                "inbound_agent_id": data.inbound_agent_id,
+                "inbound_agent_name": data.inbound_agent_name,
+                "inbound_agent_version": data.inbound_agent_version,
+                "inbound_webhook_url": data.inbound_webhook_url,
+                "nickname": data.nickname,
+                "number_provider": data.number_provider,
+                "outbound_agent_id": data.outbound_agent_id,
+                "outbound_agent_version": 1,
                 "last_modification_timestamp": phone_number_db.last_modification_timestamp
+            },
+            "errors": None
+        }
+
+    except TwilioRestException as e:
+        db.rollback()
+        return JSONResponse(
+            status_code=502,
+            content={
+                "status": False,
+                "message": "Twilio API error",
+                "data": None,
+                "errors": [{"field": "twilio", "message": str(e)}]
+            }
+        )
+
+    except Exception as e:
+        db.rollback()
+        return {
+            "status": False,
+            "message": "Internal Server Error",
+            "data": None,
+            "errors": [{"field": "server", "message": str(e)}]
+        }
+        
+# delete the purchased phone number from twilio
+@router.delete("/delete-phone-number/{phone_number}")
+def delete_phone_number(
+    phone_number: str,
+    authorization: str = Header(..., description="Bearer token"),
+    db: Session = Depends(get_db)
+):
+    try:
+        # Step 1: Authenticate (this is a placeholder, implement real API key check here)
+        if not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Invalid authorization header format")
+        
+        token = authorization.split(" ")[1]
+        if token != "YOUR_API_KEY":  # Replace with real token check logic
+            raise HTTPException(status_code=403, detail="Invalid or expired API key")
+
+        # Step 2: Look up the phone number SID via Twilio
+        incoming_numbers = client.incoming_phone_numbers.list(phone_number=phone_number)
+
+        if not incoming_numbers:
+            return {
+                "status": False,
+                "message": "Phone number not found in Twilio",
+                "data": None,
+                "errors": [{"field": "phone_number", "message": "Not found in Twilio"}]
+            }
+
+        number_sid = incoming_numbers[0].sid
+
+        # Step 3: Delete from Twilio
+        client.incoming_phone_numbers(number_sid).delete()
+
+        # Step 4: Delete from local DB
+        db_number = db.query(PhoneNumber).filter_by(phone_number=phone_number).first()
+        if db_number:
+            db.delete(db_number)
+            db.commit()
+
+        return {
+            "status": True,
+            "message": "Phone number deleted successfully",
+            "data": {
+                "phone_number": phone_number,
+                "deleted_from_twilio": True,
+                "deleted_from_database": db_number is not None
             },
             "errors": None
         }
@@ -2909,6 +2977,7 @@ def purchase_phone_number(
             "data": None,
             "errors": [{"field": "twilio", "message": str(e)}]
         }
+
     except Exception as e:
         db.rollback()
         return {
@@ -2917,6 +2986,3 @@ def purchase_phone_number(
             "data": None,
             "errors": [{"field": "server", "message": str(e)}]
         }
-        
-
-        
