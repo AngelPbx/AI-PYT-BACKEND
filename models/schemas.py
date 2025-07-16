@@ -492,8 +492,23 @@ class PhoneNumberRequest(BaseModel):
     area_code: str | None = None
     sms_enabled: bool = True
     voice_enabled: bool = True
+    webhook_url: str | None = None
 
-class PhoneNumberResponse(BaseModel):
+class PhoneNumberOut(BaseModel):
     phone_number: str
-    sid: str
-    status: str
+    phone_number_type: str
+    phone_number_pretty: str
+    area_code: int
+    inbound_agent_id: str
+    outbound_agent_id: str
+    inbound_agent_version: int
+    outbound_agent_version: int
+    nickname: str
+    inbound_webhook_url: str
+    last_modification_timestamp: float
+
+class Response(BaseModel):
+    status: bool
+    message: str
+    data: PhoneNumberOut | None = None
+    errors: list[dict] | None = None
