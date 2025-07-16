@@ -264,21 +264,11 @@ class WebCall(Base):
     call_cost = Column(JSON, nullable=True)
     llm_token_usage = Column(JSON, nullable=True)
     created_at = Column(BigInteger, default=lambda: int(time.time() * 1000))
-    updated_at = Column(BigInteger, default=lambda: int(time.time() * 1000))
+    updated_at = Column(BigInteger, default=lambda: int(time.time() * 1000))    
+class PhoneNumber(Base):
+    __tablename__ = "phone_numbers"
     
-class DidVendor(Base):
-    __tablename__ = "did_vendors"
-
-    id = Column(Integer, primary_key=True, index=True)
-    vendor_name = Column(String)
-    username = Column(String)
-    token = Column(String)
-    status = Column(String)
-    
-# class PhoneNumber(Base):
-#     __tablename__ = "phone_numbers"
-    
-#     id = Column(Integer, primary_key=True)
-#     number = Column(String, nullable=False)
-#     type = Column(String)  # local / toll_free / mobile
-#     country = Column(String)
+    id = Column(Integer, primary_key=True)
+    number = Column(String, nullable=False)
+    type = Column(String)  # local / toll_free / mobile
+    country = Column(String)
