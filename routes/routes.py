@@ -5,7 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 from openai import OpenAI
 import httpx
-from fastapi import Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter
+from fastapi import Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter, Header
 from utils.helpers import is_user_in_workspace, generate_api_key
 from sqlalchemy.orm import Session
 import uuid 
@@ -1593,6 +1593,106 @@ __all__ = ['router']
 
 # Agent apis--------------------------------------------------
 
+# @router.post("/agents")
+# def create_agent(
+#     payload: AgentCreate,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user)
+# ):
+#     if not is_user_in_workspace(current_user.id, payload.workspace_id, db):
+#         raise HTTPException(status_code=403, detail="You do not have access to this workspace")
+
+#     new_agent = pbx_ai_agent(
+#         workspace_id=payload.workspace_id,
+#         name=payload.agent_name,
+#         voice_id=payload.voice_id,
+#         voice_model=payload.voice_model,
+#         fallback_voice_ids=payload.fallback_voice_ids,
+#         voice_temperature=payload.voice_temperature,
+#         voice_speed=payload.voice_speed,
+#         volume=payload.volume,
+#         responsiveness=payload.responsiveness,
+#         interruption_sensitivity=payload.interruption_sensitivity,
+#         enable_backchannel=payload.enable_backchannel,
+#         backchannel_frequency=payload.backchannel_frequency,
+#         backchannel_words=payload.backchannel_words,
+#         reminder_trigger_ms=payload.reminder_trigger_ms,
+#         reminder_max_count=payload.reminder_max_count,
+#         ambient_sound=payload.ambient_sound,
+#         ambient_sound_volume=payload.ambient_sound_volume,
+#         language=payload.language,
+#         webhook_url=payload.webhook_url,
+#         boosted_keywords=payload.boosted_keywords,
+#         opt_out_sensitive_data_storage=payload.opt_out_sensitive_data_storage,
+#         opt_in_signed_url=payload.opt_in_signed_url,
+#         pronunciation_dictionary=[
+#             p.model_dump() for p in payload.pronunciation_dictionary
+#         ] if payload.pronunciation_dictionary else None,
+#         normalize_for_speech=payload.normalize_for_speech,
+#         end_call_after_silence_ms=payload.end_call_after_silence_ms,
+#         max_call_duration_ms=payload.max_call_duration_ms,
+#         voicemail_option=payload.voicemail_option.model_dump() if payload.voicemail_option else None,
+#         post_call_analysis_data=[
+#             a.model_dump() for a in payload.post_call_analysis_data
+#         ] if payload.post_call_analysis_data else None,
+#         post_call_analysis_model=payload.post_call_analysis_model,
+#         begin_message_delay_ms=payload.begin_message_delay_ms,
+#         ring_duration_ms=payload.ring_duration_ms,
+#         stt_mode=payload.stt_mode,
+#         vocab_specialization=payload.vocab_specialization,
+#         allow_user_dtmf=payload.allow_user_dtmf,
+#         user_dtmf_options=payload.user_dtmf_options.model_dump() if payload.user_dtmf_options else None,
+#         denoising_mode=payload.denoising_mode,
+#         response_engine=payload.response_engine.model_dump() if payload.response_engine else None,
+#         version=payload.version,
+#         last_modification_timestamp=int(time.time() * 1000),
+#     )
+
+
+
+#     db.add(new_agent)
+#     db.commit()
+#     db.refresh(new_agent)
+
+#     response_data = {
+#         "agent_id": f"{new_agent.id}",
+#         "last_modification_timestamp": new_agent.last_modification_timestamp,
+#         "agent_name": new_agent.name,
+#         "response_engine": new_agent.response_engine,
+#         "language": new_agent.language,
+#         "opt_out_sensitive_data_storage": new_agent.opt_out_sensitive_data_storage,
+#         "opt_in_signed_url": new_agent.opt_in_signed_url,
+#         "end_call_after_silence_ms": new_agent.end_call_after_silence_ms,
+#         "version": new_agent.version,
+#         "is_published": new_agent.is_published,
+#         "post_call_analysis_model": new_agent.post_call_analysis_model,
+#         "voice_id": new_agent.voice_id,
+#         "voice_model": new_agent.voice_model,
+#         "voice_temperature": new_agent.voice_temperature,
+#         "voice_speed": new_agent.voice_speed,
+#         "volume": new_agent.volume,
+#         "enable_backchannel": new_agent.enable_backchannel,
+#         "backchannel_frequency": new_agent.backchannel_frequency,
+#         "reminder_trigger_ms": new_agent.reminder_trigger_ms,
+#         "reminder_max_count": new_agent.reminder_max_count,
+#         "max_call_duration_ms": new_agent.max_call_duration_ms,
+#         "interruption_sensitivity": new_agent.interruption_sensitivity,
+#         "ambient_sound_volume": new_agent.ambient_sound_volume,
+#         "responsiveness": new_agent.responsiveness,
+#         "normalize_for_speech": new_agent.normalize_for_speech,
+#         "begin_message_delay_ms": new_agent.begin_message_delay_ms,
+#         "ring_duration_ms": new_agent.ring_duration_ms,
+#         "stt_mode": new_agent.stt_mode,
+#         "allow_user_dtmf": new_agent.allow_user_dtmf,
+#         "user_dtmf_options": new_agent.user_dtmf_options,
+#         "denoising_mode": new_agent.denoising_mode
+#     }
+
+#     return {
+#         "status": True,
+#         "data": response_data
+#     }
+
 @router.post("/agents")
 def create_agent(
     payload: AgentCreate,
@@ -1631,7 +1731,6 @@ def create_agent(
         normalize_for_speech=payload.normalize_for_speech,
         end_call_after_silence_ms=payload.end_call_after_silence_ms,
         max_call_duration_ms=payload.max_call_duration_ms,
-        voicemail_option=payload.voicemail_option.model_dump() if payload.voicemail_option else None,
         post_call_analysis_data=[
             a.model_dump() for a in payload.post_call_analysis_data
         ] if payload.post_call_analysis_data else None,
@@ -1646,16 +1745,16 @@ def create_agent(
         response_engine=payload.response_engine.model_dump() if payload.response_engine else None,
         version=payload.version,
         last_modification_timestamp=int(time.time() * 1000),
+        voicemail_option=payload.voicemail_option.model_dump() if payload.voicemail_option else None,
+        
     )
-
-
 
     db.add(new_agent)
     db.commit()
     db.refresh(new_agent)
 
     response_data = {
-        "agent_id": f"{new_agent.id}",
+        "agent_id": str(new_agent.id),
         "last_modification_timestamp": new_agent.last_modification_timestamp,
         "agent_name": new_agent.name,
         "response_engine": new_agent.response_engine,
@@ -1668,30 +1767,57 @@ def create_agent(
         "post_call_analysis_model": new_agent.post_call_analysis_model,
         "voice_id": new_agent.voice_id,
         "voice_model": new_agent.voice_model,
+        "fallback_voice_ids": new_agent.fallback_voice_ids,
         "voice_temperature": new_agent.voice_temperature,
         "voice_speed": new_agent.voice_speed,
         "volume": new_agent.volume,
         "enable_backchannel": new_agent.enable_backchannel,
         "backchannel_frequency": new_agent.backchannel_frequency,
+        "backchannel_words": new_agent.backchannel_words,
         "reminder_trigger_ms": new_agent.reminder_trigger_ms,
         "reminder_max_count": new_agent.reminder_max_count,
         "max_call_duration_ms": new_agent.max_call_duration_ms,
         "interruption_sensitivity": new_agent.interruption_sensitivity,
+        "ambient_sound": new_agent.ambient_sound,
         "ambient_sound_volume": new_agent.ambient_sound_volume,
         "responsiveness": new_agent.responsiveness,
         "normalize_for_speech": new_agent.normalize_for_speech,
         "begin_message_delay_ms": new_agent.begin_message_delay_ms,
         "ring_duration_ms": new_agent.ring_duration_ms,
         "stt_mode": new_agent.stt_mode,
+        "vocab_specialization": new_agent.vocab_specialization,
         "allow_user_dtmf": new_agent.allow_user_dtmf,
         "user_dtmf_options": new_agent.user_dtmf_options,
-        "denoising_mode": new_agent.denoising_mode
+        "denoising_mode": new_agent.denoising_mode,
+        "webhook_url": new_agent.webhook_url,
+        "boosted_keywords": new_agent.boosted_keywords,
+        "pronunciation_dictionary": new_agent.pronunciation_dictionary,
+        "voicemail_option": new_agent.voicemail_option,
+        "post_call_analysis_data": new_agent.post_call_analysis_data
     }
 
     return {
         "status": True,
         "data": response_data
     }
+
+
+@router.delete("/agent/delete-agent/{agent_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_agent(
+    agent_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == agent_id).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if not is_user_in_workspace(current_user.id, agent.workspace_id, db):
+        raise HTTPException(status_code=403, detail="You do not have access to this workspace")
+
+    db.delete(agent)
+    db.commit()
+
+    return
 
 @router.get("/all-agents/{workspace_id}")
 def list_my_agents(
@@ -1779,7 +1905,6 @@ def get_agent(
     current_user: User = Depends(get_current_user)
 ):
     agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == agent_id).first()
-    print(f"Fetching agent with ID: {agent.name}")
     if not agent:
         return JSONResponse(
             status_code=404,
@@ -1823,11 +1948,13 @@ def update_agent(
     agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-
     if not is_user_in_workspace(current_user.id, agent.workspace_id, db):
         raise HTTPException(status_code=403, detail="You do not have access to this workspace")
 
     update_data = payload.dict(exclude_unset=True)
+    # Map `agent_name` in payload to `name` in DB model
+    if "agent_name" in update_data:
+        update_data["name"] = update_data.pop("agent_name")
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields provided for update")
 
@@ -1844,7 +1971,7 @@ def update_agent(
     db.refresh(agent)
 
     response_data = {
-        "agent_id": f"{agent.id}",
+        "agent_id": str(agent.id),
         "last_modification_timestamp": agent.last_modification_timestamp,
         "agent_name": agent.name,
         "response_engine": agent.response_engine,
@@ -1857,24 +1984,33 @@ def update_agent(
         "post_call_analysis_model": agent.post_call_analysis_model,
         "voice_id": agent.voice_id,
         "voice_model": agent.voice_model,
+        "fallback_voice_ids": agent.fallback_voice_ids,
         "voice_temperature": agent.voice_temperature,
         "voice_speed": agent.voice_speed,
         "volume": agent.volume,
         "enable_backchannel": agent.enable_backchannel,
         "backchannel_frequency": agent.backchannel_frequency,
+        "backchannel_words": agent.backchannel_words,
         "reminder_trigger_ms": agent.reminder_trigger_ms,
         "reminder_max_count": agent.reminder_max_count,
         "max_call_duration_ms": agent.max_call_duration_ms,
         "interruption_sensitivity": agent.interruption_sensitivity,
+        "ambient_sound": agent.ambient_sound,
         "ambient_sound_volume": agent.ambient_sound_volume,
         "responsiveness": agent.responsiveness,
         "normalize_for_speech": agent.normalize_for_speech,
         "begin_message_delay_ms": agent.begin_message_delay_ms,
         "ring_duration_ms": agent.ring_duration_ms,
         "stt_mode": agent.stt_mode,
+        "vocab_specialization": agent.vocab_specialization,
         "allow_user_dtmf": agent.allow_user_dtmf,
         "user_dtmf_options": agent.user_dtmf_options,
-        "denoising_mode": agent.denoising_mode
+        "denoising_mode": agent.denoising_mode,
+        "webhook_url": agent.webhook_url,
+        "boosted_keywords": agent.boosted_keywords,
+        "pronunciation_dictionary": agent.pronunciation_dictionary,
+        "voicemail_option": agent.voicemail_option,
+        "post_call_analysis_data": agent.post_call_analysis_data
     }
 
     return {
@@ -2767,12 +2903,76 @@ def purchase_phone_number(
 
     except Exception as e:
         db.rollback()
-        return JSONResponse(
-            status_code=500,
-            content={
+        return {
+            "status": False,
+            "message": "Internal Server Error",
+            "data": None,
+            "errors": [{"field": "server", "message": str(e)}]
+        }
+        
+# delete the purchased phone number from twilio
+@router.delete("/delete-phone-number/{phone_number}")
+def delete_phone_number(
+    phone_number: str,
+    authorization: str = Header(..., description="Bearer token"),
+    db: Session = Depends(get_db)
+):
+    try:
+        # Step 1: Authenticate (this is a placeholder, implement real API key check here)
+        if not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Invalid authorization header format")
+        
+        token = authorization.split(" ")[1]
+        if token != "YOUR_API_KEY":  # Replace with real token check logic
+            raise HTTPException(status_code=403, detail="Invalid or expired API key")
+
+        # Step 2: Look up the phone number SID via Twilio
+        incoming_numbers = client.incoming_phone_numbers.list(phone_number=phone_number)
+
+        if not incoming_numbers:
+            return {
                 "status": False,
-                "message": "Internal Server Error",
+                "message": "Phone number not found in Twilio",
                 "data": None,
-                "errors": [{"field": "server", "message": str(e)}]
+                "errors": [{"field": "phone_number", "message": "Not found in Twilio"}]
             }
-        )
+
+        number_sid = incoming_numbers[0].sid
+
+        # Step 3: Delete from Twilio
+        client.incoming_phone_numbers(number_sid).delete()
+
+        # Step 4: Delete from local DB
+        db_number = db.query(PhoneNumber).filter_by(phone_number=phone_number).first()
+        if db_number:
+            db.delete(db_number)
+            db.commit()
+
+        return {
+            "status": True,
+            "message": "Phone number deleted successfully",
+            "data": {
+                "phone_number": phone_number,
+                "deleted_from_twilio": True,
+                "deleted_from_database": db_number is not None
+            },
+            "errors": None
+        }
+
+    except TwilioRestException as e:
+        db.rollback()
+        return {
+            "status": False,
+            "message": "Twilio API error",
+            "data": None,
+            "errors": [{"field": "twilio", "message": str(e)}]
+        }
+
+    except Exception as e:
+        db.rollback()
+        return {
+            "status": False,
+            "message": "Internal Server Error",
+            "data": None,
+            "errors": [{"field": "server", "message": str(e)}]
+        }

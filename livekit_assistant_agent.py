@@ -66,16 +66,6 @@ def build_stt(s2s_model: str = None, language: str = "en"):
         # Default to Whisper as fallback
         return openai.STT(language=language)
 
-# def build_stt(s2s_model, language="en"):
-#     """Dynamically build STT"""
-#     if "whisper" in s2s_model:
-#         return openai.STT(language=language)
-#     elif "deepgram" in s2s_model:
-#         return deepgram.STT(model=s2s_model)
-#     else:
-#         return openai.STT(language=language)
-
-
 def build_tts(agent):
     """Dynamically build TTS   openai-tts is in agent model""" 
     if agent.voice_model == "openai-tts":

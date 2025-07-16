@@ -192,8 +192,8 @@ class AgentCreate(BaseModel):
     response_engine: Optional[ResponseEngine] = None
 
 class AgentUpdate(BaseModel):
-    name: Optional[str] = None
-    response_engine: Optional[str] = None
+    agent_name: Optional[str] = None
+    response_engine: Optional[Dict[str, Any]] = None
     language: Optional[str] = None
     opt_out_sensitive_data_storage: Optional[bool] = None
     opt_in_signed_url: Optional[bool] = None
@@ -202,16 +202,19 @@ class AgentUpdate(BaseModel):
     is_published: Optional[bool] = None
     post_call_analysis_model: Optional[str] = None
     voice_id: Optional[str] = None
+    fallback_voice_ids: Optional[List[str]] = None
     voice_model: Optional[str] = None
     voice_temperature: Optional[float] = None
     voice_speed: Optional[float] = None
     volume: Optional[float] = None
     enable_backchannel: Optional[bool] = None
-    backchannel_frequency: Optional[int] = None
+    backchannel_frequency: Optional[float] = None
+    backchannel_words: Optional[List[str]] = None
     reminder_trigger_ms: Optional[int] = None
     reminder_max_count: Optional[int] = None
     max_call_duration_ms: Optional[int] = None
     interruption_sensitivity: Optional[float] = None
+    ambient_sound: Optional[str] = None
     ambient_sound_volume: Optional[float] = None
     responsiveness: Optional[float] = None
     normalize_for_speech: Optional[bool] = None
@@ -219,9 +222,15 @@ class AgentUpdate(BaseModel):
     ring_duration_ms: Optional[int] = None
     stt_mode: Optional[str] = None
     allow_user_dtmf: Optional[bool] = None
-    user_dtmf_options: Optional[List[str]] = None
+    user_dtmf_options: Optional[Dict[str, Any]] = None
     denoising_mode: Optional[str] = None
-
+    webhook_url: Optional[str] = None
+    boosted_keywords: Optional[List[str]] = None
+    pronunciation_dictionary: Optional[List[Pronunciation]] = None
+    voicemail_option: Optional[VoicemailOption] = None
+    post_call_analysis_data: Optional[List[PostCallAnalysis]] = None
+    vocab_specialization: Optional[str] = None
+    
     class Config:
         from_attributes = True
         
