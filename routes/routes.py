@@ -2708,8 +2708,8 @@ def purchase_phone_number(
         # Step 4: Format area code and pretty phone number
         # Assuming phone_number is in E.164 format, e.g., "+14157774444"
         national_number = phone_number[2:]  # Remove "+1"
-        area_code = int(national_number[:3])  # First 3 digits for US numbers
-        phone_number_pretty = f"+1 ({national_number[:3]}) {national_number[3:6]}-{national_number[6:]}"
+        area_code = int(national_number[:3]) if data.country_code == "US" else 0  # Fallback to 0 for non-US
+        phone_number_pretty = f"+1 ({national_number[:3]}) {national_number[3:6]}-{national_number[6:]}" if data.country_code == "US" else phone_number
 
         # Step 5: Save to database
         phone_number_db = PhoneNumber(
@@ -2717,13 +2717,14 @@ def purchase_phone_number(
             phone_number_type="ucaas-twilio",
             phone_number_pretty=phone_number_pretty,
             area_code=area_code,
-            inbound_agent_id="xxxxx",
-            outbound_agent_id="xxxxx",
-            inbound_agent_version=1,
-            outbound_agent_version=1,
-            nickname="Frontdesk Number",
-            inbound_webhook_url=data.webhook_url or "https://example.com/inbound-webhook",
+            inbound_agent_id="xxxxx",  # Stored as-is in DB, overridden in response
+            outbound_agent_id="xxxxx",  # Stored as-is in DB, overridden in response
+            inbound_agent_version=1,    # Stored as-is in DB, overridden in response
+            outbound_agent_version=1,   # Stored as-is in DB, overridden in response
+            nickname="Frontdesk Number",  # Stored as-is in DB, overridden in response
+            inbound_webhook_url=data.webhook_url or "https://example.com/inbound-webhook",  # Stored as-is in DB, overridden in response
             last_modification_timestamp=1703413636133,
+            owner_id=current_user.id
         )
         db.add(phone_number_db)
 
@@ -2745,12 +2746,14 @@ def purchase_phone_number(
                 "phone_number_type": phone_number_db.phone_number_type,
                 "phone_number_pretty": phone_number_db.phone_number_pretty,
                 "area_code": phone_number_db.area_code,
-                "inbound_agent_id": phone_number_db.inbound_agent_id,
-                "outbound_agent_id": phone_number_db.outbound_agent_id,
-                "inbound_agent_version": phone_number_db.inbound_agent_version,
-                "outbound_agent_version": phone_number_db.outbound_agent_version,
-                "nickname": phone_number_db.nickname,
-                "inbound_webhook_url": phone_number_db.inbound_webhook_url,
+                "inbound_agent_id": None,
+                "inbound_agent_name": None,
+                "inbound_agent_version": None,
+                "inbound_webhook_url": None,
+                "nickname": "ucaas",
+                "number_provider": "twilio",
+                "outbound_agent_id": None,
+                "outbound_agent_version": None,
                 "last_modification_timestamp": phone_number_db.last_modification_timestamp
             },
             "errors": None
@@ -2772,3 +2775,6 @@ def purchase_phone_number(
             "data": None,
             "errors": [{"field": "server", "message": str(e)}]
         }
+        
+
+        
