@@ -265,10 +265,18 @@ class WebCall(Base):
     llm_token_usage = Column(JSON, nullable=True)
     created_at = Column(BigInteger, default=lambda: int(time.time() * 1000))
     updated_at = Column(BigInteger, default=lambda: int(time.time() * 1000))    
-# class PhoneNumber(Base):
-#     __tablename__ = "phone_numbers"
-    
-#     id = Column(Integer, primary_key=True)
-#     number = Column(String, nullable=False)
-#     type = Column(String)  # local / toll_free / mobile
-#     country = Column(String)
+
+class PhoneNumber(Base):
+    __tablename__ = "phone_numbers"
+    id = Column(Integer, primary_key=True, index=True)
+    phone_number = Column(String, unique=True, index=True)
+    phone_number_type = Column(String)
+    phone_number_pretty = Column(String)
+    area_code = Column(Integer)
+    inbound_agent_id = Column(String)
+    outbound_agent_id = Column(String)
+    inbound_agent_version = Column(Integer)
+    outbound_agent_version = Column(Integer)
+    nickname = Column(String)
+    inbound_webhook_url = Column(String)
+    last_modification_timestamp = Column(Float)
