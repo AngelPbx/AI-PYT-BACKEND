@@ -202,16 +202,19 @@ class AgentUpdate(BaseModel):
     is_published: Optional[bool] = None
     post_call_analysis_model: Optional[str] = None
     voice_id: Optional[str] = None
+    fallback_voice_ids: Optional[List[str]] = None
     voice_model: Optional[str] = None
     voice_temperature: Optional[float] = None
     voice_speed: Optional[float] = None
     volume: Optional[float] = None
     enable_backchannel: Optional[bool] = None
     backchannel_frequency: Optional[float] = None
+    backchannel_words: Optional[List[str]] = None
     reminder_trigger_ms: Optional[int] = None
     reminder_max_count: Optional[int] = None
     max_call_duration_ms: Optional[int] = None
     interruption_sensitivity: Optional[float] = None
+    ambient_sound: Optional[str] = None
     ambient_sound_volume: Optional[float] = None
     responsiveness: Optional[float] = None
     normalize_for_speech: Optional[bool] = None
@@ -221,7 +224,13 @@ class AgentUpdate(BaseModel):
     allow_user_dtmf: Optional[bool] = None
     user_dtmf_options: Optional[Dict[str, Any]] = None
     denoising_mode: Optional[str] = None
-
+    webhook_url: Optional[str] = None
+    boosted_keywords: Optional[List[str]] = None
+    pronunciation_dictionary: Optional[List[Pronunciation]] = None
+    voicemail_option: Optional[VoicemailOption] = None
+    post_call_analysis_data: Optional[List[PostCallAnalysis]] = None
+    vocab_specialization: Optional[str] = None
+    
     class Config:
         orm_mode = True
 
