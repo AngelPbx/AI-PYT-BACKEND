@@ -25,7 +25,7 @@ from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember,
 from models.schemas import ( UserSignup, UserLogin, UpdateUser,DispatchRequest,CreateRoomRequestSchema,WebCallResponse,WebCallCreateRequest,GetPBXLLMOut,
                                 WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, 
                                 CreateChatRequest, CreateChatResponse, VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut, APIResponse, PhoneNumberRequest, 
-                                PhoneNumberResponse
+                                Response, PhoneNumber
                      )
 from utils.helpers import (
     format_response, validate_email,
@@ -2602,29 +2602,29 @@ TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 
 client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
-@router.post("/purchase-phone-number", response_model=PhoneNumberResponse)
-async def purchase_phone_number(request: PhoneNumberRequest):
-    """
-    Purchase a phone number from Twilio based on provided criteria.
-    """
+@router.post("/purchase-phone-number", response_model=Response)
+def purchase_phone_number(
+    data: PhoneNumberRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     try:
         # Step 1: Search for available phone numbers
         available_numbers = client.available_phone_numbers(
-            request.country_code
+            data.country_code
         ).local.list(
-            sms_enabled=request.sms_enabled,
-            voice_enabled=request.voice_enabled,
-            area_code=request.area_code
+            sms_enabled=data.sms_enabled,
+            voice_enabled=data.voice_enabled,
+            area_code=data.area_code
         )
-        
-        # Print available numbers for debugging
-        print(f"Available numbers for {request.country_code}: {[num.phone_number for num in available_numbers]}")
 
         if not available_numbers:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No available phone numbers found for country {request.country_code}"
-            )
+            return {
+                "status": False,
+                "message": f"No available phone numbers found for country {data.country_code}",
+                "data": None,
+                "errors": [{"field": "phone_number", "message": "No available numbers"}]
+            }
 
         # Step 2: Select the first available number
         phone_number = available_numbers[0].phone_number
@@ -2634,22 +2634,70 @@ async def purchase_phone_number(request: PhoneNumberRequest):
             phone_number=phone_number
         )
 
-        # Step 4: Return response
-        return PhoneNumberResponse(
+        # Step 4: Format area code and pretty phone number
+        # Assuming phone_number is in E.164 format, e.g., "+14157774444"
+        national_number = phone_number[2:]  # Remove "+1"
+        area_code = int(national_number[:3])  # First 3 digits for US numbers
+        phone_number_pretty = f"+1 ({national_number[:3]}) {national_number[3:6]}-{national_number[6:]}"
+
+        # Step 5: Save to database
+        phone_number_db = PhoneNumber(
             phone_number=purchased_number.phone_number,
-            sid=purchased_number.sid,
-            status="Purchased",
+            phone_number_type="ucaas-twilio",
+            phone_number_pretty=phone_number_pretty,
+            area_code=area_code,
+            inbound_agent_id="xxxxx",
+            outbound_agent_id="xxxxx",
+            inbound_agent_version=1,
+            outbound_agent_version=1,
+            nickname="Frontdesk Number",
+            inbound_webhook_url=data.webhook_url or "https://example.com/inbound-webhook",
+            last_modification_timestamp=1703413636133,
         )
+        db.add(phone_number_db)
+
+        # Step 6: Configure webhook if provided
+        if data.webhook_url:
+            client.incoming_phone_numbers(purchased_number.sid).update(
+                sms_url=data.webhook_url
+            )
+
+        db.commit()
+        db.refresh(phone_number_db)
+
+        # Step 7: Return response
+        return {
+            "status": True,
+            "message": "Phone number purchased",
+            "data": {
+                "phone_number": phone_number_db.phone_number,
+                "phone_number_type": phone_number_db.phone_number_type,
+                "phone_number_pretty": phone_number_db.phone_number_pretty,
+                "area_code": phone_number_db.area_code,
+                "inbound_agent_id": phone_number_db.inbound_agent_id,
+                "outbound_agent_id": phone_number_db.outbound_agent_id,
+                "inbound_agent_version": phone_number_db.inbound_agent_version,
+                "outbound_agent_version": phone_number_db.outbound_agent_version,
+                "nickname": phone_number_db.nickname,
+                "inbound_webhook_url": phone_number_db.inbound_webhook_url,
+                "last_modification_timestamp": phone_number_db.last_modification_timestamp
+            },
+            "errors": None
+        }
 
     except TwilioRestException as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Twilio API error: {str(e)}"
-        )
+        db.rollback()
+        return {
+            "status": False,
+            "message": "Twilio API error",
+            "data": None,
+            "errors": [{"field": "twilio", "message": str(e)}]
+        }
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Unexpected error: {str(e)}"
-        )
-
-
+        db.rollback()
+        return {
+            "status": False,
+            "message": "Internal Server Error",
+            "data": None,
+            "errors": [{"field": "server", "message": str(e)}]
+        }
