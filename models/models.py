@@ -265,10 +265,10 @@ class WebCall(Base):
     llm_token_usage = Column(JSON, nullable=True)
     created_at = Column(BigInteger, default=lambda: int(time.time() * 1000))
     updated_at = Column(BigInteger, default=lambda: int(time.time() * 1000))    
-class PhoneNumber(Base):
-    __tablename__ = "phone_numbers"
+# class PhoneNumber(Base):
+#     __tablename__ = "phone_numbers"
     
-    id = Column(Integer, primary_key=True)
-    number = Column(String, nullable=False)
-    type = Column(String)  # local / toll_free / mobile
-    country = Column(String)
+#     id = Column(Integer, primary_key=True)
+#     number = Column(String, nullable=False)
+#     type = Column(String)  # local / toll_free / mobile
+#     country = Column(String)
