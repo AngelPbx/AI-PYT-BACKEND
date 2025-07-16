@@ -504,7 +504,6 @@ class WebCallResponse(BaseModel):
     duration_ms: Optional[int] = None
     transcript: Optional[str] = None
 
-    # 👇 Change to Dict since you're saving full JSON
     transcript_object: Optional[Dict[str, Any]] = {}
 
     transcript_with_tool_calls: Optional[List[Dict[str, Any]]] = []
