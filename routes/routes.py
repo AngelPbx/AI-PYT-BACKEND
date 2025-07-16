@@ -752,54 +752,206 @@ def create_knowledge_base(
             message="Internal Server Error",
             errors=[{"field": "server", "message": str(e)}]
         )
-
-@router.get("/workspaces/{workspace_id}/knowledge-bases")
-def list_kbs(
+    
+@router.post("/workspaces/{workspace_id}/create-knowledge-base")
+async def create_or_update_knowledge_base(
     workspace_id: int,
+    kb_id: Optional[str] = Form(None),
+    kb_name: Optional[str] = Form(None),
+    files: List[UploadFile] = File(default=[]),
+    urls: Optional[List[str]] = Form(default=[]),
+    text_filenames: Optional[List[str]] = Form(default=[]),
+    text_contents: Optional[List[str]] = Form(default=[]),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
-        membership = db.query(WorkspaceMember).filter_by(
-            workspace_id=workspace_id,
-            user_id=current_user.id
+        # Check workspace ownership
+        workspace = db.query(Workspace).filter(
+            Workspace.id == workspace_id
         ).first()
-
-        if not membership:
+        if not workspace:
             return format_response(
                 status=False,
-                message="Access denied",
-                errors=[{"field": "workspace_id", "message": "User is not a member of this workspace"}],
-                status_code=403
+                message="Workspace not found",
+                errors=[{"field": "workspace_id", "message": "Workspace not found"}],
+                status_code=404
             )
 
-        kbs = db.query(KnowledgeBase).filter_by(workspace_id=workspace_id).all()
+        # Check if KB exists
+        if kb_id:
+            # Try to fetch existing KB by kb_id
+            kb = db.query(KnowledgeBase).filter_by(
+                workspace_id=workspace_id, id=kb_id
+            ).first()
+        else:
+            kb = None
+       
+        now_utc = datetime.utcnow()
 
-        data = []
-        for kb in kbs:
-            sources = []
-            for file in kb.knowledge_files:
+        if not kb:
+            # Create new KB
+            kb_id = f"{uuid.uuid4().hex[:16]}"
+            kb_folder = UPLOAD_DIR / f"workspace_{workspace_id}" / kb_id
+            kb_folder.mkdir(parents=True, exist_ok=True)
+
+            kb = KnowledgeBase(
+                id=kb_id,
+                name=kb_name,
+                file_path=str(kb_folder),
+                workspace_id=workspace_id,
+                enable_auto_refresh=True,
+                auto_refresh_interval=24,
+                last_refreshed=now_utc
+            )
+            db.add(kb)
+            db.flush()
+        else:
+            # Existing KB folder
+            kb_folder = Path(kb.file_path)
+            kb_folder.mkdir(parents=True, exist_ok=True)
+
+        sources = []
+
+        # Process uploaded files
+        for file in files:
+            if file and file.filename:
+                filename = f"{uuid.uuid4().hex}_{file.filename}"
+                file_path = kb_folder / filename
+                content = await file.read()
+                with open(file_path, "wb") as f_out:
+                    f_out.write(content)
+
+                # Extract text for embedding
+                ext = Path(filename).suffix.lower()
+                extract_text = ""
+                if ext == ".pdf":
+                    with fitz.open(file_path) as doc:
+                        extract_text = "\n".join(p.get_text() for p in doc)
+                elif ext == ".docx":
+                    extract_text = "\n".join(p.text for p in Document(file_path).paragraphs)
+                elif ext == ".txt":
+                    extract_text = content.decode("utf-8")
+                else:
+                    extract_text = ""  # fallback for unsupported
+
+                # Truncate and embed
+                truncated = extract_text[:3000]
+                embedding_response = openai_client.embeddings.create(
+                    model="text-embedding-3-small",
+                    input=truncated
+                )
+                embedding_vector = embedding_response.data[0].embedding
+
+                kb_file = KnowledgeFile(
+                    kb_id=kb.id,
+                    filename=filename,
+                    file_path=str(file_path),
+                    extract_data=extract_text,
+                    embedding=embedding_vector,
+                    status=FileStatus.completed,
+                    source_type=SourceStatus.file  # ✅ updated to new enum
+                )
+                db.add(kb_file)
+                db.flush() 
                 sources.append({
-                    "type": file.source_type.value if file.source_type else "document",
-                    "source_id": file.kb_id,
-                    "filename": file.filename,
-                    "file_url": file.file_path
+                    "type": "document",
+                    "source_id": kb_file.id,
+                    "filename": filename,
+                    "file_url": str(file_path)
                 })
 
-            kb_info = {
-                "knowledge_base_id": kb.id,
-                "knowledge_base_name": kb.name,
-                "status": "in_progress",  # or determine real status if available
-                "knowledge_base_sources": sources,
-                "enable_auto_refresh": kb.enable_auto_refresh,
-                "last_refreshed_timestamp": int(kb.last_refreshed.timestamp() * 1000) if kb.last_refreshed else None
-            }
-            data.append(kb_info)
+        # Process web URLs
+        for url in urls or []:
+            if url.strip():
+                filename = f"web_{uuid.uuid4().hex}.txt"
+                file_path = kb_folder / filename
+                res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+                res.raise_for_status()
+                soup = BeautifulSoup(res.text, "html.parser")
+                for tag in soup(["script", "style"]): tag.decompose()
+                extract_text = soup.get_text(separator="\n", strip=True)
+                file_path.write_text(extract_text, encoding="utf-8")
+
+                truncated = extract_text[:3000]
+                embedding_response = openai_client.embeddings.create(
+                    model="text-embedding-3-small",
+                    input=truncated
+                )
+                embedding_vector = embedding_response.data[0].embedding
+
+                kb_file = KnowledgeFile(
+                    kb_id=kb.id,
+                    filename=filename,
+                    file_path=str(file_path),
+                    extract_data=extract_text,
+                    embedding=embedding_vector,
+                    status=FileStatus.completed,
+                    source_type=SourceStatus.url  # ✅ updated to new enum
+                )
+                db.add(kb_file)
+                db.flush() 
+                sources.append({
+                    "type": "url",
+                    "source_id": kb_file.id,
+                    "filename": filename,
+                    "file_url": str(file_path)
+                })
+
+        # Process text entries
+        for title, content in zip(text_filenames or [], text_contents or []):
+            if title.strip() and content.strip():
+                filename = f"{uuid.uuid4().hex}_{title}.txt"
+                file_path = kb_folder / filename
+                file_path.write_text(content, encoding="utf-8")
+
+                truncated = content[:3000]
+                embedding_response = openai_client.embeddings.create(
+                    model="text-embedding-3-small",
+                    input=truncated
+                )
+                embedding_vector = embedding_response.data[0].embedding
+
+                kb_file = KnowledgeFile(
+                    kb_id=kb.id,
+                    filename=filename,
+                    file_path=str(file_path),
+                    extract_data=content,
+                    embedding=embedding_vector,
+                    status=FileStatus.completed,
+                    source_type=SourceStatus.txt  # ✅ updated to new enum
+                )
+                db.add(kb_file)
+                db.flush() 
+                sources.append({
+                    "type": "txt",
+                    "source_id": kb_file.id,
+                    "filename": filename,
+                    "file_url": str(file_path)
+                })
+
+        if not sources:
+            return format_response(
+                status=False,
+                message="No valid sources provided",
+                errors=[{"field": "sources", "message": "Provide at least one file, URL, or text"}]
+            )
+
+        kb.last_refreshed = now_utc
+        db.commit()
+        db.refresh(kb)
 
         return format_response(
             status=True,
-            message="Knowledge bases retrieved successfully",
-            data=data
+            message="Knowledge base updated successfully",
+            data={
+                "knowledge_base_id": kb.id,
+                "knowledge_base_name": kb.name,
+                "status": "in_progress",
+                "knowledge_base_sources": sources,
+                "enable_auto_refresh": kb.enable_auto_refresh,
+                "last_refreshed_timestamp": int(now_utc.timestamp() * 1000)
+            }
         )
 
     except Exception as e:
@@ -807,10 +959,74 @@ def list_kbs(
         return format_response(
             status=False,
             message="Internal Server Error",
-            errors=[{"field": "server", "message": str(e)}]
+            errors=[{"field": "server", "message": str(e)}],
+            status_code=500
         )
+
+
+@router.get("/workspaces/{workspace_id}/list-knowledge-bases")
+def list_knowledge_bases(
+    workspace_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    try:
+        # Check workspace ownership or membership
+        workspace = db.query(Workspace).filter(
+            Workspace.id == workspace_id
+        ).first()
+
+        if not workspace:
+            return format_response(
+                status=False,
+                message="Workspace not found",
+                errors=[{"field": "workspace_id", "message": "Workspace not found"}],
+                status_code=404
+            )
+
+        # Fetch all KnowledgeBases for workspace
+        kbs = db.query(KnowledgeBase).filter_by(workspace_id=workspace_id).all()
+       
+        response_data = []
+        for kb in kbs:
+            # Fetch all files (KnowledgeFile) for this KB
+            knowledge_files = db.query(KnowledgeFile).filter_by(kb_id=kb.id).all()
+
+            sources = []
+            for kf in knowledge_files:
+                sources.append({
+                    "type": kf.source_type,  # file, url, txt
+                    "source_id": kf.id,
+                    "filename": kf.filename,
+                    "file_url": kf.file_path
+                })
+               
+
+            response_data.append({
+                "knowledge_base_id": kb.id,
+                "knowledge_base_name": kb.name,
+                "status": "completed",  # You can make dynamic if needed
+                "knowledge_base_sources": sources,
+                "enable_auto_refresh": kb.enable_auto_refresh,
+                "last_refreshed_timestamp": int(kb.last_refreshed.timestamp() * 1000) if kb.last_refreshed else None
+            })
+
+        return format_response(
+            status=True,
+            message="Knowledge bases fetched successfully",
+            data=response_data
+        )
+
+    except Exception as e:
+        return format_response(
+            status=False,
+            message="Internal Server Error",
+            errors=[{"field": "server", "message": str(e)}],
+            status_code=500
+        )
+
     
-@router.get("/knowledge-bases/{kb_id}")
+@router.get("/get-knowledge-base/{kb_id}")
 def get_knowledge_base(
     kb_id: str,  # changed from int to str
     db: Session = Depends(get_db),
@@ -840,13 +1056,14 @@ def get_knowledge_base(
             )
 
         files = db.query(KnowledgeFile).filter_by(kb_id=kb.id).all()
+        
         sources = [
             {
                 "type": "document",
                 "source_id": kb.workspace_id,
                 "filename": f.filename,
                 "file_url": f.file_path
-            } for f in files
+            } for f in files if not print(f.embedding)
         ]
 
         data = {
