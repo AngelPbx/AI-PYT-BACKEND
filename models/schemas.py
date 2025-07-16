@@ -192,8 +192,8 @@ class AgentCreate(BaseModel):
     response_engine: Optional[ResponseEngine] = None
 
 class AgentUpdate(BaseModel):
-    name: Optional[str] = None
-    response_engine: Optional[str] = None
+    agent_name: Optional[str] = None
+    response_engine: Optional[Dict[str, Any]] = None
     language: Optional[str] = None
     opt_out_sensitive_data_storage: Optional[bool] = None
     opt_in_signed_url: Optional[bool] = None
@@ -207,7 +207,7 @@ class AgentUpdate(BaseModel):
     voice_speed: Optional[float] = None
     volume: Optional[float] = None
     enable_backchannel: Optional[bool] = None
-    backchannel_frequency: Optional[int] = None
+    backchannel_frequency: Optional[float] = None
     reminder_trigger_ms: Optional[int] = None
     reminder_max_count: Optional[int] = None
     max_call_duration_ms: Optional[int] = None
@@ -219,11 +219,12 @@ class AgentUpdate(BaseModel):
     ring_duration_ms: Optional[int] = None
     stt_mode: Optional[str] = None
     allow_user_dtmf: Optional[bool] = None
-    user_dtmf_options: Optional[List[str]] = None
+    user_dtmf_options: Optional[Dict[str, Any]] = None
     denoising_mode: Optional[str] = None
 
     class Config:
         orm_mode = True
+
         
 class AgentOut(AgentCreate):
     agent_id: str = Field(..., alias="id")

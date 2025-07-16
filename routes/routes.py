@@ -1779,7 +1779,6 @@ def get_agent(
     current_user: User = Depends(get_current_user)
 ):
     agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == agent_id).first()
-    print(f"Fetching agent with ID: {agent.name}")
     if not agent:
         return JSONResponse(
             status_code=404,
@@ -1824,11 +1823,13 @@ def update_agent(
     agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-
     if not is_user_in_workspace(current_user.id, agent.workspace_id, db):
         raise HTTPException(status_code=403, detail="You do not have access to this workspace")
 
     update_data = payload.dict(exclude_unset=True)
+    # Map `agent_name` in payload to `name` in DB model
+    if "agent_name" in update_data:
+        update_data["name"] = update_data.pop("agent_name")
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields provided for update")
 
