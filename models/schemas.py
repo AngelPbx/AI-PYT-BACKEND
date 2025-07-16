@@ -155,7 +155,7 @@ class AgentCreate(BaseModel):
     workspace_id: int
     agent_name: Optional[str] = None
     version: Optional[int] = 0
-    voice_id: str
+    voice_id: Optional[str] = None
     voice_model: Optional[str] = None
     fallback_voice_ids: Optional[List[str]] = None
     voice_temperature: Optional[float] = 1.0
@@ -189,8 +189,42 @@ class AgentCreate(BaseModel):
     allow_user_dtmf: Optional[bool] = True
     user_dtmf_options: Optional[UserDTMFOptions] = None
     denoising_mode: Optional[str] = "noise-cancellation"
-    response_engine: Optional[ResponseEngine]
+    response_engine: Optional[ResponseEngine] = None
 
+class AgentUpdate(BaseModel):
+    name: Optional[str] = None
+    response_engine: Optional[str] = None
+    language: Optional[str] = None
+    opt_out_sensitive_data_storage: Optional[bool] = None
+    opt_in_signed_url: Optional[bool] = None
+    end_call_after_silence_ms: Optional[int] = None
+    version: Optional[str] = None
+    is_published: Optional[bool] = None
+    post_call_analysis_model: Optional[str] = None
+    voice_id: Optional[str] = None
+    voice_model: Optional[str] = None
+    voice_temperature: Optional[float] = None
+    voice_speed: Optional[float] = None
+    volume: Optional[float] = None
+    enable_backchannel: Optional[bool] = None
+    backchannel_frequency: Optional[int] = None
+    reminder_trigger_ms: Optional[int] = None
+    reminder_max_count: Optional[int] = None
+    max_call_duration_ms: Optional[int] = None
+    interruption_sensitivity: Optional[float] = None
+    ambient_sound_volume: Optional[float] = None
+    responsiveness: Optional[float] = None
+    normalize_for_speech: Optional[bool] = None
+    begin_message_delay_ms: Optional[int] = None
+    ring_duration_ms: Optional[int] = None
+    stt_mode: Optional[str] = None
+    allow_user_dtmf: Optional[bool] = None
+    user_dtmf_options: Optional[List[str]] = None
+    denoising_mode: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+        
 class AgentOut(AgentCreate):
     agent_id: str = Field(..., alias="id")
     agent_name: str = Field(..., alias="name")
