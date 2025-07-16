@@ -1813,7 +1813,6 @@ def get_agent(
         }
     )
 
-
 @router.patch("/agent/update-agent/{agent_id}")
 def update_agent(
     agent_id: str,
