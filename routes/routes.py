@@ -5,7 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 from openai import OpenAI
 import httpx
-from fastapi import Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter
+from fastapi import Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter, Header
 from utils.helpers import is_user_in_workspace, generate_api_key
 from sqlalchemy.orm import Session
 import uuid 
@@ -2893,5 +2893,69 @@ def purchase_phone_number(
             "errors": [{"field": "server", "message": str(e)}]
         }
         
-
+# delete the purchased phone number from twilio
+@router.delete("/delete-phone-number/{phone_number}")
+def delete_phone_number(
+    phone_number: str,
+    authorization: str = Header(..., description="Bearer token"),
+    db: Session = Depends(get_db)
+):
+    try:
+        # Step 1: Authenticate (this is a placeholder, implement real API key check here)
+        if not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Invalid authorization header format")
         
+        token = authorization.split(" ")[1]
+        if token != "YOUR_API_KEY":  # Replace with real token check logic
+            raise HTTPException(status_code=403, detail="Invalid or expired API key")
+
+        # Step 2: Look up the phone number SID via Twilio
+        incoming_numbers = client.incoming_phone_numbers.list(phone_number=phone_number)
+
+        if not incoming_numbers:
+            return {
+                "status": False,
+                "message": "Phone number not found in Twilio",
+                "data": None,
+                "errors": [{"field": "phone_number", "message": "Not found in Twilio"}]
+            }
+
+        number_sid = incoming_numbers[0].sid
+
+        # Step 3: Delete from Twilio
+        client.incoming_phone_numbers(number_sid).delete()
+
+        # Step 4: Delete from local DB
+        db_number = db.query(PhoneNumber).filter_by(phone_number=phone_number).first()
+        if db_number:
+            db.delete(db_number)
+            db.commit()
+
+        return {
+            "status": True,
+            "message": "Phone number deleted successfully",
+            "data": {
+                "phone_number": phone_number,
+                "deleted_from_twilio": True,
+                "deleted_from_database": db_number is not None
+            },
+            "errors": None
+        }
+
+    except TwilioRestException as e:
+        db.rollback()
+        return {
+            "status": False,
+            "message": "Twilio API error",
+            "data": None,
+            "errors": [{"field": "twilio", "message": str(e)}]
+        }
+
+    except Exception as e:
+        db.rollback()
+        return {
+            "status": False,
+            "message": "Internal Server Error",
+            "data": None,
+            "errors": [{"field": "server", "message": str(e)}]
+        }
