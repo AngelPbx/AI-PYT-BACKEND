@@ -2680,63 +2680,58 @@ def purchase_phone_number(
 ):
     try:
         # Step 1: Search for available phone numbers
-        available_numbers = client.available_phone_numbers(
-            data.country_code
-        ).local.list(
-            sms_enabled=data.sms_enabled,
-            voice_enabled=data.voice_enabled,
+        available_numbers = client.available_phone_numbers("US").local.list(
+            sms_enabled=True,
+            voice_enabled=True,
             area_code=data.area_code
         )
 
         if not available_numbers:
-            return {
-                "status": False,
-                "message": f"No available phone numbers found for country {data.country_code}",
-                "data": None,
-                "errors": [{"field": "phone_number", "message": "No available numbers"}]
-            }
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": False,
+                    "message": f"No available phone numbers found in area code {data.area_code}",
+                    "data": None,
+                    "errors": [{"field": "phone_number", "message": "No available numbers"}]
+                }
+            )
 
-        # Step 2: Select the first available number
+        # Step 2: Select and purchase number
         phone_number = available_numbers[0].phone_number
+        purchased_number = client.incoming_phone_numbers.create(phone_number=phone_number)
 
-        # Step 3: Purchase the phone number
-        purchased_number = client.incoming_phone_numbers.create(
-            phone_number=phone_number
-        )
+        # Step 3: Format number
+        national_number = phone_number[2:]  # remove '+1'
+        area_code = int(national_number[:3])
+        phone_number_pretty = f"+1 ({national_number[:3]}) {national_number[3:6]}-{national_number[6:]}"
 
-        # Step 4: Format area code and pretty phone number
-        # Assuming phone_number is in E.164 format, e.g., "+14157774444"
-        national_number = phone_number[2:]  # Remove "+1"
-        area_code = int(national_number[:3]) if data.country_code == "US" else 0  # Fallback to 0 for non-US
-        phone_number_pretty = f"+1 ({national_number[:3]}) {national_number[3:6]}-{national_number[6:]}" if data.country_code == "US" else phone_number
-
-        # Step 5: Save to database
+        # Step 4: Save to DB
         phone_number_db = PhoneNumber(
             phone_number=purchased_number.phone_number,
             phone_number_type="ucaas-twilio",
             phone_number_pretty=phone_number_pretty,
             area_code=area_code,
-            inbound_agent_id="xxxxx",  # Stored as-is in DB, overridden in response
-            outbound_agent_id="xxxxx",  # Stored as-is in DB, overridden in response
-            inbound_agent_version=1,    # Stored as-is in DB, overridden in response
-            outbound_agent_version=1,   # Stored as-is in DB, overridden in response
-            nickname="Frontdesk Number",  # Stored as-is in DB, overridden in response
-            inbound_webhook_url=data.webhook_url or "https://example.com/inbound-webhook",  # Stored as-is in DB, overridden in response
+            inbound_agent_id=data.inbound_agent_id,
+            outbound_agent_id=data.outbound_agent_id,
+            inbound_agent_version=data.inbound_agent_version or 1,
+            outbound_agent_version=1,
+            nickname=data.nickname,
+            inbound_webhook_url=data.inbound_webhook_url or "https://example.com/inbound-webhook",
             last_modification_timestamp=1703413636133,
             owner_id=current_user.id
         )
         db.add(phone_number_db)
 
-        # Step 6: Configure webhook if provided
-        if data.webhook_url:
+        if data.inbound_webhook_url:
             client.incoming_phone_numbers(purchased_number.sid).update(
-                sms_url=data.webhook_url
+                sms_url=data.inbound_webhook_url
             )
 
         db.commit()
         db.refresh(phone_number_db)
 
-        # Step 7: Return response
+        # Step 5: Return success
         return {
             "status": True,
             "message": "Phone number purchased",
@@ -2745,14 +2740,14 @@ def purchase_phone_number(
                 "phone_number_type": phone_number_db.phone_number_type,
                 "phone_number_pretty": phone_number_db.phone_number_pretty,
                 "area_code": phone_number_db.area_code,
-                "inbound_agent_id": None,
-                "inbound_agent_name": None,
-                "inbound_agent_version": None,
-                "inbound_webhook_url": None,
-                "nickname": "ucaas",
-                "number_provider": "twilio",
-                "outbound_agent_id": None,
-                "outbound_agent_version": None,
+                "inbound_agent_id": data.inbound_agent_id,
+                "inbound_agent_name": data.inbound_agent_name,
+                "inbound_agent_version": data.inbound_agent_version,
+                "inbound_webhook_url": data.inbound_webhook_url,
+                "nickname": data.nickname,
+                "number_provider": data.number_provider,
+                "outbound_agent_id": data.outbound_agent_id,
+                "outbound_agent_version": 1,
                 "last_modification_timestamp": phone_number_db.last_modification_timestamp
             },
             "errors": None
@@ -2760,20 +2755,24 @@ def purchase_phone_number(
 
     except TwilioRestException as e:
         db.rollback()
-        return {
-            "status": False,
-            "message": "Twilio API error",
-            "data": None,
-            "errors": [{"field": "twilio", "message": str(e)}]
-        }
+        return JSONResponse(
+            status_code=502,
+            content={
+                "status": False,
+                "message": "Twilio API error",
+                "data": None,
+                "errors": [{"field": "twilio", "message": str(e)}]
+            }
+        )
+
     except Exception as e:
         db.rollback()
-        return {
-            "status": False,
-            "message": "Internal Server Error",
-            "data": None,
-            "errors": [{"field": "server", "message": str(e)}]
-        }
-        
-
-        
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": False,
+                "message": "Internal Server Error",
+                "data": None,
+                "errors": [{"field": "server", "message": str(e)}]
+            }
+        )

@@ -223,7 +223,7 @@ class AgentUpdate(BaseModel):
     denoising_mode: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
         
 class AgentOut(AgentCreate):
     agent_id: str = Field(..., alias="id")
@@ -521,11 +521,14 @@ class WebCallResponse(BaseModel):
         
 # Pydantic models for request and response
 class PhoneNumberRequest(BaseModel):
-    country_code: str = "US"
-    area_code: int | None = None
-    sms_enabled: bool = True
-    voice_enabled: bool = True
-    webhook_url: str | None = None
+    area_code: int
+    inbound_agent_id: str | None = None
+    inbound_agent_name: str | None = None
+    inbound_agent_version: int | None = None
+    inbound_webhook_url: str | None = None
+    nickname: str
+    number_provider: str
+    outbound_agent_id: str | None = None
 
 class PhoneNumberOut(BaseModel):
     phone_number: str
