@@ -5,30 +5,28 @@ from pathlib import Path
 from uuid import uuid4
 from openai import OpenAI
 import httpx
-from datetime import timedelta
 from fastapi import Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter
 from utils.helpers import is_user_in_workspace, generate_api_key
 from sqlalchemy.orm import Session
 import uuid 
 from fastapi.responses import JSONResponse
 import requests
-from jose import jwt, JWTError
 from bs4 import BeautifulSoup
 import time,json
 from livekit import api
 from typing import List, Optional
+from twilio.rest import Client
+
 from sqlalchemy.orm import sessionmaker, Session
 from db.database import get_db, get_current_user
-from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, 
-                           KnowledgeFile, APIKey, FileStatus, SourceStatus, pbx_ai_agent, PBXLLM, 
-                           ChatSession, LLMVoice, ImportedPhoneNumber, WebCall, DidVendor
+from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, KnowledgeFile, APIKey, FileStatus, SourceStatus, 
+                           pbx_ai_agent, PBXLLM, ChatSession, LLMVoice, ImportedPhoneNumber, WebCall
                            )
-from models.schemas import (
-    UserSignup, UserLogin, UpdateUser,DispatchRequest,CreateRoomRequestSchema,WebCallResponse,WebCallCreateRequest,GetPBXLLMOut,
-    WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, KnowledgeBaseCreate, CountryWithPrefix, Country,
-    AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, CreateChatRequest, CreateChatResponse,
-    VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut, APIResponse, PurchaseDIDsRequest, BasicResponse
-)
+from models.schemas import ( UserSignup, UserLogin, UpdateUser,DispatchRequest,CreateRoomRequestSchema,WebCallResponse,WebCallCreateRequest,GetPBXLLMOut,
+                                WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, 
+                                CreateChatRequest, CreateChatResponse, VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut, APIResponse, PhoneNumberRequest, 
+                                PhoneNumberResponse
+                     )
 from utils.helpers import (
     format_response, validate_email,
     validate_password, format_datetime_ist
@@ -40,10 +38,7 @@ from utils.security import (
 
 from starlette.config import Config
 
-from utils.twilio_client import twilio_client
 from models.twilio import PhoneNumberOut
-
-from models.schemas import SearchNumbersRequest, SearchNumbersResponse, PhoneNumberResponse, AvailableCountriesResponse, PurchaseDidResponse, PurchaseDidRequest
 
 from db.database import engine
 
@@ -1811,7 +1806,6 @@ def update_pbx_llm(
         }
     )
 
-
 @router.get("/all-pbx-llms/{workspace_id}")
 def get_pbx_llm(
     workspace_id=int,
@@ -1909,7 +1903,6 @@ def create_voice(
     db.refresh(voice)
     return voice
 
-
 @router.get("/llm-voice/{voice_id}", response_model=VoiceOut)
 def get_voice(
     voice_id: str,
@@ -1992,7 +1985,7 @@ def list_voices(
         
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500,
             detail={
                 "status": False,
                 "message": "Internal Server Error",
@@ -2371,291 +2364,75 @@ def get_web_call_by_id(
         }
     )
 
-@router.post("/twilio/search-numbers", response_model=SearchNumbersResponse)
-async def search_numbers(request: SearchNumbersRequest):
-    # Load credentials from environment
-    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+# import os
+# from twilio.rest import Client
 
-    if not account_sid or not auth_token:
-        raise HTTPException(status_code=500, detail="Twilio credentials not configured in environment.")
+# account_sid = os.environ["AC0d8d96e8bec0d573804a160bd96483b3"]
+# auth_token = os.environ["d55c8e547b69bbcb34cfc27bc7bc155f"]
+# client = Client(account_sid, auth_token)
 
-    country = request.country or "US"
-    quantity = request.quantity
-    number_type = request.searchType.lower()
+# incoming_phone_number = client.incoming_phone_numbers.create(
+#     phone_number="+14155552344"
+# )
 
-    if number_type == 'tollfree':
-        number_type = 'TollFree'
-    elif number_type == 'domestic':
-        number_type = 'Local'
+# print(incoming_phone_number.account_sid)
 
-    url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/AvailablePhoneNumbers/{country}/{number_type}.json"
-    params = {"PageSize": quantity}
+from twilio.base.exceptions import TwilioRestException
 
-    # Add filters
-    if request.npa:
-        params["Contains"] = request.npa
+# Twilio credentials from environment variables
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 
-    if request.nxx:
-        params["Contains"] = request.nxx + "$"
+client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 
-    # Usage filters
-    if request.usage:
-        if request.usage.Voice:
-            params["VoiceEnabled"] = "true"
-        if request.usage.Text:
-            params["SmsEnabled"] = "true"
-        if request.usage.Fax:
-            params["FaxEnabled"] = "true"
-        if request.usage.Mms:
-            params["MmsEnabled"] = "true"
-
+@router.post("/purchase-phone-number", response_model=PhoneNumberResponse)
+async def purchase_phone_number(request: PhoneNumberRequest):
+    """
+    Purchase a phone number from Twilio based on provided criteria.
+    """
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, params=params, auth=(account_sid, auth_token))
+        # Step 1: Search for available phone numbers
+        available_numbers = client.available_phone_numbers(
+            request.country_code
+        ).local.list(
+            sms_enabled=request.sms_enabled,
+            voice_enabled=request.voice_enabled,
+            area_code=request.area_code
+        )
+        
+        # Print available numbers for debugging
+        print(f"Available numbers for {request.country_code}: {[num.phone_number for num in available_numbers]}")
 
-        if response.status_code == 403:
-            data = response.json()
+        if not available_numbers:
             raise HTTPException(
-                status_code=403,
-                detail={
-                    "status": False,
-                    "message": data.get("message", "Forbidden"),
-                    "status_code": 403
-                }
+                status_code=404,
+                detail=f"No available phone numbers found for country {request.country_code}"
             )
 
-        data = response.json()
-        available_numbers = data.get("available_phone_numbers", [])
+        # Step 2: Select the first available number
+        phone_number = available_numbers[0].phone_number
 
-        results = []
-        for item in available_numbers:
-            results.append(PhoneNumberResponse(
-                phone_number=item["phone_number"],
-                friendly_name=item["friendly_name"],
-                iso_country=item["iso_country"],
-                region=item.get("region"),
-                postal_code=item.get("postal_code"),
-                lata=item.get("lata"),
-                rate_center=item.get("rate_center"),
-                currency="USD",
-                price=request.price,
-                didSummary=item["phone_number"],
-                vendorId=request.vendorId
-            ))
-
-        return {
-            "status": True,
-            "message": f"Please Select Available {number_type} Number",
-            "data": results
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
-FALLBACK_COUNTRIES = [
-    {"country": "Australia", "country_code": "AU", "prefix_code": "+61"},
-    {"country": "United States", "country_code": "US", "prefix_code": "+1"},
-    {"country": "Canada", "country_code": "CA", "prefix_code": "+1"},
-    {"country": "United Kingdom", "country_code": "GB", "prefix_code": "+44"},
-    {"country": "India", "country_code": "IN", "prefix_code": "+91"},
-    {"country": "Germany", "country_code": "DE", "prefix_code": "+49"},
-    {"country": "France", "country_code": "FR", "prefix_code": "+33"},
-]
-    
-@router.get("/twilio/available-countries", response_model=AvailableCountriesResponse)
-async def available_countries():
-    try:
-        # Read Twilio credentials from environment variables
-        encoded_sid = os.getenv("TWILIO_ACCOUNT_SID_ENC")
-        encoded_token = os.getenv("TWILIO_AUTH_TOKEN_ENC")
-
-        if not encoded_sid or not encoded_token:
-            # Use fallback country list if credentials are missing
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": True,
-                    "data": FALLBACK_COUNTRIES,
-                    "total": len(FALLBACK_COUNTRIES),
-                    "message": "Available countries (fallback)"
-                }
-            )
-
-        # Decode credentials
-        account_sid = base64.b64decode(encoded_sid).decode("utf-8")
-        auth_token = base64.b64decode(encoded_token).decode("utf-8")
-
-        url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/AvailablePhoneNumbers.json"
-
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url, auth=(account_sid, auth_token))
-
-        if response.status_code != 200:
-            raise Exception("Twilio API error")
-
-        twilio_data = response.json()
-        countries = twilio_data.get("countries", [])
-
-        if not countries:
-            raise Exception("No countries found in Twilio response")
-
-        country_list = []
-        for entry in countries:
-            country_list.append({
-                "country": entry["country"],
-                "country_code": entry["country_code"],
-                "subresource_uris": {
-                    "local": bool(entry["subresource_uris"].get("local")),
-                    "mobile": bool(entry["subresource_uris"].get("mobile")),
-                    "toll_free": bool(entry["subresource_uris"].get("toll_free")),
-                }
-            })
-
-        # Manually add India
-        country_list.append({
-            "country": "India",
-            "country_code": "IN",
-            "subresource_uris": {
-                "local": True,
-                "mobile": True,
-                "toll_free": True
-            }
-        })
-
-        # Sort by country name
-        sorted_list = sorted(country_list, key=lambda x: x["country"])
-
-        return {
-            "status": True,
-            "data": sorted_list,
-            "total": len(sorted_list),
-            "message": "Available countries"
-        }
-
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": False,
-                "message": "Failed to fetch available countries",
-                "error": str(e)
-            }
+        # Step 3: Purchase the phone number
+        purchased_number = client.incoming_phone_numbers.create(
+            phone_number=phone_number
         )
 
-@router.post("/twilio/purchase-dids", response_model=BasicResponse)
-async def purchase_did_in_twilio(
-    req: PurchaseDIDsRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    vendor = db.query(DidVendor).get(req.vendorId)
-    if not vendor:
-        raise HTTPException(status_code=400, detail="Vendor ID is required")
+        # Step 4: Return response
+        return PhoneNumberResponse(
+            phone_number=purchased_number.phone_number,
+            sid=purchased_number.sid,
+            status="Purchased",
+        )
 
-    # Decode Twilio credentials
-    tw_sid = base64.b64decode(vendor.username).decode()
-    tw_token = base64.b64decode(vendor.token).decode()
+    except TwilioRestException as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Twilio API error: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        )
 
-    # Gather selected DIDs
-    numbers = [d["did"] for d in req.dids] if req.dids else []
-    if not numbers:
-        raise HTTPException(status_code=400, detail="No DIDs provided")
-
-    # Check / create sub-account
-    sub = db.query(TwilioSubAccounts).filter_by(account_id=req.companyId).first()
-    if not sub and req.type == "configure":
-        # Assumes you have a helper that returns {"sid": ...}
-        sub = create_subaccount_twilio(tw_sid, tw_token, f"Subaccount_{req.companyId}_tw")
-        db.add(sub); db.commit()
-        tw_sid = sub.sid
-    elif sub:
-        tw_sid = sub.sid
-
-    phone_num = numbers[0]
-    tw_url = f"https://api.twilio.com/2010-04-01/Accounts/{tw_sid}/IncomingPhoneNumbers.json"
-    data = {"PhoneNumber": phone_num}
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(tw_url, data=data, auth=(tw_sid, tw_token))
-    tw_resp = resp.json()
-
-    pn = tw_resp.get("phone_number")
-    if not pn:
-        error = tw_resp
-        raise HTTPException(status_code=500, detail=f"Failed to purchase DID: {error}")
-
-    order_id = f"tw_{pn}"
-
-    # Save order status
-    db.add(DidOrderStatus(
-        account_id=req.companyId,
-        vendor_id=req.vendorId,
-        order_id=order_id,
-        status=tw_resp.get("status", "Pending"),
-    ))
-    db.commit()
-    # Immediately mark completed (per your logic)
-    db.query(DidOrderStatus).filter_by(order_id=order_id).update({"status": "Completed"})
-    db.commit()
-
-    cap = tw_resp.get("capabilities", {})
-    sms = cap.get("sms", False)
-    voice = cap.get("voice", False)
-    mms = cap.get("mms", False)
-
-    domain = db.query(Domain).filter_by(account_id=req.companyId).first()
-
-    db.add(DidDetail(
-        account_id=req.companyId,
-        did_vendor_id=req.vendorId,
-        orderid=order_id,
-        sid=tw_resp.get("sid"),
-        did=pn,
-        cnam=False,
-        sms=sms,
-        e911=False,
-        price=req.rate,
-        created_by=req.created_by,
-        domain=domain.id if domain else None
-    ))
-
-    db.commit()
-
-    # Call your trunk setup function
-    trunk_result = await set_phone_trunk({
-        "vendor_id": req.vendorId,
-        "phone_number": pn,
-        "orderId": order_id,
-        "username": tw_sid,
-        "authtoken": tw_token,
-        "sid": tw_resp.get("sid")
-    }, db)
-    if not trunk_result["status"]:
-        raise HTTPException(status_code=500, detail=f"Unable to set trunks: {trunk_result['message']}")
-
-    return BasicResponse(status=True, message="Order Completed")
-# --- Country prefix code map ---
-country_prefix_codes = {
-    'DZ': '+213', 'AR': '+54', 'AU': '+61', 'AT': '+43', 'BB': '+1-246',
-    'BE': '+32', 'BJ': '+229', 'BA': '+387', 'BW': '+267', 'BR': '+55',
-    'BG': '+359', 'CA': '+1', 'CL': '+56', 'CO': '+57', 'HR': '+385',
-    'CZ': '+420', 'DK': '+45', 'EC': '+593', 'SV': '+503', 'EE': '+372',
-    'FI': '+358', 'GE': '+995', 'DE': '+49', 'GH': '+233', 'GR': '+30',
-    'GD': '+1-473', 'GN': '+224', 'HK': '+852', 'HU': '+36', 'IN': '+91',
-    'ID': '+62', 'IE': '+353', 'IL': '+972', 'IT': '+39', 'JP': '+81',
-    'KE': '+254', 'LT': '+370', 'MO': '+853', 'MY': '+60', 'MX': '+52',
-    'NA': '+264', 'NL': '+31', 'NZ': '+64', 'PA': '+507', 'PE': '+51',
-    'PH': '+63', 'PL': '+48', 'PT': '+351', 'PR': '+1-787', 'RO': '+40',
-    'SK': '+421', 'SI': '+386', 'ZA': '+27', 'SE': '+46', 'CH': '+41',
-    'TH': '+66', 'TN': '+216', 'GB': '+44', 'US': '+1', 'VI': '+1-340',
-}
-
-@router.post("/country/prefix-map", response_model=List[CountryWithPrefix])
-def map_country_prefix(countries: List[Country]):
-    result = []
-    for country in countries:
-        prefix = country_prefix_codes.get(country.country_code)
-        result.append(CountryWithPrefix(**country.dict(), prefix_code=prefix))
-    return result
 
