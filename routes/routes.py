@@ -5,7 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 from openai import OpenAI
 import httpx
-from fastapi import Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter, Header
+from fastapi import Depends, Query, HTTPException, Form, UploadFile, File, Body, APIRouter, Header, Request
 from utils.helpers import is_user_in_workspace, generate_api_key
 from sqlalchemy.orm import Session
 import uuid 
@@ -2982,3 +2982,38 @@ def delete_phone_number(
             "data": None,
             "errors": [{"field": "server", "message": str(e)}]
         }
+
+import logging
+
+@router.post("/twilio/voice")
+async def handle_incoming_call():
+    """
+    Twilio hits this endpoint when a call comes in.
+    This responds with TwiML to forward the call to your SIP trunk (LiveKit).
+    """
+    sip_uri = "sip:2tfpk869du5.sip.livekit.cloud"
+    twiml = f"""
+    <Response>
+        <Dial>
+            <Sip>{sip_uri}</Sip>
+        </Dial>
+    </Response>
+    """
+    logging.info("Returning SIP TwiML to Twilio.")
+    return Response(content=twiml, media_type="application/xml")
+
+# optional 
+@router.post("/livekit/webhook")
+async def livekit_webhook(request: Request):
+    body = await request.json()
+    event = body.get("event")
+    participant = body.get("participant", {}).get("identity")
+    room = body.get("room", {}).get("name")
+
+    logging.info(f"LiveKit event received: {event}")
+    logging.info(f"Participant: {participant}, Room: {room}")
+
+    if event == "participant_connected":
+        logging.info(f"SIP participant {participant} joined room {room}. Notify agent or connect.")
+
+    return {"status": "ok"}
