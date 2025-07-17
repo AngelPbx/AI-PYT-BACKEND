@@ -752,15 +752,40 @@ def create_knowledge_base(
 async def create_or_update_knowledge_base(
     workspace_id: int,
     kb_id: Optional[str] = Form(None),
-    kb_name: Optional[str] = Form(None),
-    files: List[UploadFile] = File(default=[]),
-    urls: Optional[List[str]] = Form(default=[]),
-    text_filenames: Optional[List[str]] = Form(default=[]),
-    text_contents: Optional[List[str]] = Form(default=[]),
+    knowledge_base_name: Optional[str] = Form(None),
+    knowledge_base_files: List[UploadFile] = File(default=[]),
+    knowledge_base_urls: Optional[str] = Form(default=None),
+    knowledge_base_texts: Optional[str] = Form(default=None),
+
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     try:
+        if knowledge_base_urls:
+            try:
+                knowledge_base_urls = json.loads(knowledge_base_urls)
+            except json.JSONDecodeError:
+                return format_response(
+                    status=False,
+                    message="Invalid JSON for knowledge_base_urls",
+                    errors=[{"field": "knowledge_base_urls", "message": "Invalid JSON format"}],
+                    status_code=400
+                )
+        else:
+            knowledge_base_urls = []
+        if knowledge_base_texts:
+            try:
+                knowledge_base_texts = json.loads(knowledge_base_texts)
+            except json.JSONDecodeError:
+                return format_response(
+                    status=False,
+                    message="Invalid JSON for knowledge_base_texts",
+                    errors=[{"field": "knowledge_base_texts", "message": "Invalid JSON format"}],
+                    status_code=400
+                )
+        else:
+            knowledge_base_texts = []
+
         # Check workspace ownership
         workspace = db.query(Workspace).filter(
             Workspace.id == workspace_id
@@ -792,7 +817,7 @@ async def create_or_update_knowledge_base(
 
             kb = KnowledgeBase(
                 id=kb_id,
-                name=kb_name,
+                name=knowledge_base_name,
                 file_path=str(kb_folder),
                 workspace_id=workspace_id,
                 enable_auto_refresh=True,
@@ -809,7 +834,7 @@ async def create_or_update_knowledge_base(
         sources = []
 
         # Process uploaded files
-        for file in files:
+        for file in knowledge_base_files:
             if file and file.filename:
                 filename = f"{uuid.uuid4().hex}_{file.filename}"
                 file_path = kb_folder / filename
@@ -831,7 +856,7 @@ async def create_or_update_knowledge_base(
                     extract_text = ""  # fallback for unsupported
 
                 # Truncate and embed
-                truncated = extract_text[:3000]
+                truncated = extract_text[:30000]
                 embedding_response = openai_client.embeddings.create(
                     model="text-embedding-3-small",
                     input=truncated
@@ -857,7 +882,7 @@ async def create_or_update_knowledge_base(
                 })
 
         # Process web URLs
-        for url in urls or []:
+        for url in knowledge_base_urls or []:
             if url.strip():
                 filename = f"web_{uuid.uuid4().hex}.txt"
                 file_path = kb_folder / filename
@@ -868,7 +893,7 @@ async def create_or_update_knowledge_base(
                 extract_text = soup.get_text(separator="\n", strip=True)
                 file_path.write_text(extract_text, encoding="utf-8")
 
-                truncated = extract_text[:3000]
+                truncated = extract_text[:30000]
                 embedding_response = openai_client.embeddings.create(
                     model="text-embedding-3-small",
                     input=truncated
@@ -893,14 +918,15 @@ async def create_or_update_knowledge_base(
                     "file_url": str(file_path)
                 })
 
-        # Process text entries
-        for title, content in zip(text_filenames or [], text_contents or []):
-            if title.strip() and content.strip():
+        for entry in knowledge_base_texts or []:
+            title = entry.get("title", "").strip()
+            content = entry.get("text", "").strip()
+            if title and content:
                 filename = f"{uuid.uuid4().hex}_{title}.txt"
                 file_path = kb_folder / filename
                 file_path.write_text(content, encoding="utf-8")
 
-                truncated = content[:3000]
+                truncated = content[:30000]
                 embedding_response = openai_client.embeddings.create(
                     model="text-embedding-3-small",
                     input=truncated
@@ -919,7 +945,7 @@ async def create_or_update_knowledge_base(
                 db.add(kb_file)
                 db.flush() 
                 sources.append({
-                    "type": "txt",
+                    "type": "text",
                     "source_id": kb_file.id,
                     "filename": filename,
                     "file_url": str(file_path)
@@ -989,8 +1015,13 @@ def list_knowledge_bases(
 
             sources = []
             for kf in knowledge_files:
+                mapped_type = (
+                    "document" if kf.source_type == "file"
+                    else "text" if kf.source_type == "txt"
+                    else kf.source_type
+                )
                 sources.append({
-                    "type": kf.source_type,  # file, url, txt
+                    "type": mapped_type,  # file, url, txt
                     "source_id": kf.id,
                     "filename": kf.filename,
                     "file_url": kf.file_path
@@ -1054,17 +1085,19 @@ def get_knowledge_base(
         
         sources = [
             {
-                "type": "document",
-                "source_id": kb.workspace_id,
+                "type": "document" if f.source_type == "file"
+                        else "text" if f.source_type == "txt"
+                        else f.source_type,  # map source_type to string
+                "source_id": f.id,
                 "filename": f.filename,
                 "file_url": f.file_path
-            } for f in files if not print(f.embedding)
+            } for f in files
         ]
 
         data = {
             "knowledge_base_id": kb.id,
             "knowledge_base_name": kb.name,
-            "status": "ready",
+            "status": "in_progress",
             "knowledge_base_sources": sources,
             "enable_auto_refresh": kb.enable_auto_refresh,
             "last_refreshed_timestamp": int(kb.last_refreshed.timestamp() * 1000) if kb.last_refreshed else None
@@ -2131,6 +2164,42 @@ def create_pbx_llm(
         llm_id=f"{llm.id}"
     )
    
+@router.delete("/delete-pbx-llm/{llm_id}")
+def delete_pbx_llm(
+    llm_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Fetch the PBXLLM
+    llm = db.query(PBXLLM).filter(PBXLLM.id == llm_id).first()
+    if not llm:
+        return format_response(
+            status=False,
+            message="PBXLLM not found",
+            errors=[{"field": "llm_id", "message": "PBXLLM not found"}],
+            status_code=404
+        )
+
+    # Validate workspace access
+    if not is_user_in_workspace(current_user.id, llm.workspace_id, db):
+        return format_response(
+            status=False,
+            message="Access denied",
+            errors=[{"field": "workspace", "message": "You do not have access to this workspace"}],
+            status_code=403
+        )
+
+    # Delete PBXLLM
+    db.delete(llm)
+    db.commit()
+
+    return format_response(
+        status=True,
+        message="LLM deleted successfully",
+        data=None
+    )
+
+
 @router.get("/pbx-llm/{llm_id}")
 def get_pbx_llm(llm_id: str, 
                 current_user: User = Depends(get_current_user),
@@ -2982,6 +3051,7 @@ def delete_phone_number(
             "data": None,
             "errors": [{"field": "server", "message": str(e)}]
         }
+
 
 import logging
 
