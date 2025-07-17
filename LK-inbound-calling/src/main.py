@@ -2,7 +2,7 @@ from livekit_api import create_inbound_trunk, list_inbound_trunks, create_dispat
 
 if __name__ == "__main__":
     print("Creating inbound SIP trunk...")
-    trunk = create_inbound_trunk("Test Trunk", ["+15105550100"])
+    trunk = create_inbound_trunk("Test Trunk", ["+18333659442"])
     print("Trunk:", trunk)
 
     trunk_id = trunk.get("trunk", {}).get("trunk_id")

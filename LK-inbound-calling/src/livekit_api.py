@@ -13,7 +13,7 @@ async def create_trunk_and_rule():
     trunk = await client.sip.create_sip_inbound_trunk({
         "trunk": {
             "name": "Test Trunk",
-            "numbers": ["+15105550100"],
+            "numbers": ["+18333659442"],
             "krisp_enabled": True
         }
     })
