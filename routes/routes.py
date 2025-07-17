@@ -945,7 +945,7 @@ async def create_or_update_knowledge_base(
                 db.add(kb_file)
                 db.flush() 
                 sources.append({
-                    "type": "txt",
+                    "type": "text",
                     "source_id": kb_file.id,
                     "filename": filename,
                     "file_url": str(file_path)
@@ -1015,8 +1015,13 @@ def list_knowledge_bases(
 
             sources = []
             for kf in knowledge_files:
+                mapped_type = (
+                    "document" if kf.source_type == "file"
+                    else "text" if kf.source_type == "txt"
+                    else kf.source_type
+                )
                 sources.append({
-                    "type": kf.source_type,  # file, url, txt
+                    "type": mapped_type,  # file, url, txt
                     "source_id": kf.id,
                     "filename": kf.filename,
                     "file_url": kf.file_path
@@ -1080,7 +1085,9 @@ def get_knowledge_base(
         
         sources = [
             {
-                "type": "document",
+                "type": "document" if f.source_type == "file"
+                        else "text" if f.source_type == "txt"
+                        else f.source_type,  # map source_type to string
                 "source_id": f.id,
                 "filename": f.filename,
                 "file_url": f.file_path
@@ -2157,6 +2164,42 @@ def create_pbx_llm(
         llm_id=f"{llm.id}"
     )
    
+@router.delete("/delete-pbx-llm/{llm_id}")
+def delete_pbx_llm(
+    llm_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Fetch the PBXLLM
+    llm = db.query(PBXLLM).filter(PBXLLM.id == llm_id).first()
+    if not llm:
+        return format_response(
+            status=False,
+            message="PBXLLM not found",
+            errors=[{"field": "llm_id", "message": "PBXLLM not found"}],
+            status_code=404
+        )
+
+    # Validate workspace access
+    if not is_user_in_workspace(current_user.id, llm.workspace_id, db):
+        return format_response(
+            status=False,
+            message="Access denied",
+            errors=[{"field": "workspace", "message": "You do not have access to this workspace"}],
+            status_code=403
+        )
+
+    # Delete PBXLLM
+    db.delete(llm)
+    db.commit()
+
+    return format_response(
+        status=True,
+        message="LLM deleted successfully",
+        data=None
+    )
+
+
 @router.get("/pbx-llm/{llm_id}")
 def get_pbx_llm(llm_id: str, 
                 current_user: User = Depends(get_current_user),
