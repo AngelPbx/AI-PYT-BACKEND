@@ -1802,7 +1802,7 @@ def create_agent(
     }
 
 
-@router.delete("/agent/delete-agent/{agent_id}", status_code=204)
+@router.delete("/agent/delete-agent/{agent_id}")
 def delete_agent(
     agent_id: str,
     db: Session = Depends(get_db),
@@ -1811,13 +1811,19 @@ def delete_agent(
     agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
     if not is_user_in_workspace(current_user.id, agent.workspace_id, db):
         raise HTTPException(status_code=403, detail="You do not have access to this workspace")
 
+    # 🗑️ Delete the agent
     db.delete(agent)
     db.commit()
 
-    return
+    return {
+        "status": True,
+        "message": f"Agent deleted successfully",
+        "data": None
+    }
 
 @router.get("/all-agents/{workspace_id}")
 def list_my_agents(
