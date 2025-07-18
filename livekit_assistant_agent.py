@@ -1,6 +1,5 @@
 import logging, os, re, json, time, asyncio
 import numpy as np
-from typing import Optional, List
 from typing import AsyncIterable, Optional
 from dataclasses import dataclass, field
 from dotenv import load_dotenv
@@ -111,23 +110,18 @@ def cosine_similarity(a, b):
         return 0
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-# @dataclass
-def retrieve_kb_context(query: str, kb_ids: List[str], top_k: int = 3) -> str:
+def retrieve_kb_context(query: str, kb_id: str, top_k: int = 3) -> str:
     query_embedding = get_embedding(query)
     session = SessionLocal()
     results = []
     try:
-        kb_files = (
-            session.query(KnowledgeFile)
-            .filter(KnowledgeFile.kb_id.in_(kb_ids))
-            .all()
-        )
+        kb_files = session.query(KnowledgeFile).filter(KnowledgeFile.kb_id == kb_id).all()
         for file in kb_files:
             if not file.extract_data:
                 continue
             emb = file.embedding
             if isinstance(emb, str):
-                emb = np.array(eval(emb))
+                emb = np.array(eval(emb))                
             score = cosine_similarity(query_embedding, emb)
             results.append({
                 "score": score,
@@ -185,7 +179,7 @@ async def hangup_call():
 # --- Shared State ---
 @dataclass
 class UserData:
-    kb_ids: List[str]
+    kb_id: str
     persona: str
     begin_message: Optional[str] = None
     ctx: Optional[JobContext] = None
@@ -334,11 +328,9 @@ async def entrypoint(ctx: JobContext):
     begin_message=llm.begin_message
     persona = llm.general_prompt
     kb_ids = llm.knowledge_base_ids or []
-    userdata = UserData(kb_ids=kb_ids, persona=persona, begin_message=begin_message, ctx=ctx)
+    kb_id = kb_ids[0] if kb_ids else None
 
-    # kb_id = kb_ids[0] if kb_ids else None
-
-    # userdata = UserData(kb_id=kb_id, persona=persona,begin_message=begin_message ,ctx=ctx)
+    userdata = UserData(kb_id=kb_id, persona=persona,begin_message=begin_message ,ctx=ctx)
 
 
     session = AgentSession(
@@ -495,8 +487,8 @@ async def entrypoint(ctx: JobContext):
 
     ctx.add_shutdown_callback(write_transcript)
     
-    await ctx.connect()
-    
+   
+
     # Optional: Background audio
     # background_audio = BackgroundAudioPlayer(
     #     ambient_sound=AudioConfig(BuiltinAudioClip.OFFICE_AMBIENCE, volume=0.8),
@@ -505,8 +497,6 @@ async def entrypoint(ctx: JobContext):
     #         AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.7),
     #     ],
     # )
-    
-
     # participant = await ctx.wait_for_participant()
     # if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
     #     call_id = participant.attributes.get("sip.callID")
@@ -519,7 +509,8 @@ async def entrypoint(ctx: JobContext):
         ))
     
     # await background_audio.start(agent_session=session, room=ctx.room)
-    
+    await ctx.connect()
+
 # --- CLI ---
 if __name__ == "__main__":
     cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint,agent_name=os.getenv("ROOM")))
