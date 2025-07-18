@@ -498,30 +498,39 @@ async def entrypoint(ctx: JobContext):
             db.close()
 
     ctx.add_shutdown_callback(write_transcript)
-    
-   
+    await ctx.connect()
+    await session.start(agent=agent,room=ctx.room,
+                         room_input_options=RoomInputOptions(
+            noise_cancellation=noise_cancellation.BVC()
+        ))
+    # An audio player with automated ambient and thinking sounds
+    background_audio = BackgroundAudioPlayer(
+        ambient_sound=AudioConfig(BuiltinAudioClip.OFFICE_AMBIENCE, volume=0.8),
+        thinking_sound=[
+            AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.8),
+            AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.7),
+        ],
+    )
 
-    # Optional: Background audio
-    # background_audio = BackgroundAudioPlayer(
-    #     ambient_sound=AudioConfig(BuiltinAudioClip.OFFICE_AMBIENCE, volume=0.8),
-    #     thinking_sound=[
-    #         AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.8),
-    #         AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.7),
-    #     ],
-    # )
+    # An audio player with a custom ambient sound played on a loop
+    background_audio = BackgroundAudioPlayer(
+        ambient_sound="forestbirds.wav",
+    )
+
+    # An audio player for on-demand playback only
+    background_audio = BackgroundAudioPlayer()
+
+    await background_audio.start(agent_session=session, room=ctx.room)
     # participant = await ctx.wait_for_participant()
     # if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
     #     call_id = participant.attributes.get("sip.callID")
     #     phone = participant.attributes.get("sip.phoneNumber", "unknown")
     #     print(f"📞 SIP call from {phone}, Call ID: {call_id}")
 
-    await session.start(agent=agent,room=ctx.room,
-                         room_input_options=RoomInputOptions(
-            noise_cancellation=noise_cancellation.BVC()
-        ))
     
-    # await background_audio.start(agent_session=session, room=ctx.room)
-    await ctx.connect()
+    
+    
+    
 
 # --- CLI ---
 if __name__ == "__main__":
