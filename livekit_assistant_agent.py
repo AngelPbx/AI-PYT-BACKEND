@@ -110,48 +110,12 @@ def cosine_similarity(a, b):
         return 0
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-def retrieve_kb_context(query: str, kb_id: str, top_k: int = 3) -> str:
-    query_embedding = get_embedding(query)
-    session = SessionLocal()
-    results = []
-    try:
-        kb_files = session.query(KnowledgeFile).filter(KnowledgeFile.kb_id == kb_id).all()
-        for file in kb_files:
-            if not file.extract_data:
-                continue
-            emb = file.embedding
-            if isinstance(emb, str):
-                emb = np.array(eval(emb))                
-            score = cosine_similarity(query_embedding, emb)
-            results.append({
-                "score": score,
-                "content": file.extract_data.strip(),
-                "file_path": file.file_path,
-            })
-            # results.append((score, file.extract_data.strip()))
-    finally:
-        session.close()
-    # Take top_k matches only
-    top_chunks = sorted(results, key=lambda x: x["score"], reverse=True)[:top_k]
-
-    # Create combined context
-    combined_context = "\n\n".join(chunk["content"] for chunk in top_chunks)
-
-    return combined_context, top_chunks
-    # top_chunks = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
-    # return "\n\n".join(chunk for _, chunk in top_chunks)
-# def retrieve_kb_context(query: str, kb_ids: List[str], top_k: int = 3) -> str:
+# def retrieve_kb_context(query: str, kb_id: str, top_k: int = 3) -> str:
 #     query_embedding = get_embedding(query)
 #     session = SessionLocal()
 #     results = []
 #     try:
-#         kb_files = (
-#             session.query(KnowledgeFile)
-#             .filter(KnowledgeFile.kb_id.in_(kb_ids))
-#             .all()
-#         )
-
-#         # kb_files = session.query(KnowledgeFile).filter(KnowledgeFile.kb_id == kb_id).all()
+#         kb_files = session.query(KnowledgeFile).filter(KnowledgeFile.kb_id == kb_id).all()
 #         for file in kb_files:
 #             if not file.extract_data:
 #                 continue
@@ -159,11 +123,47 @@ def retrieve_kb_context(query: str, kb_id: str, top_k: int = 3) -> str:
 #             if isinstance(emb, str):
 #                 emb = np.array(eval(emb))                
 #             score = cosine_similarity(query_embedding, emb)
-#             results.append((score, file.extract_data.strip()))
+#             results.append({
+#                 "score": score,
+#                 "content": file.extract_data.strip(),
+#                 "file_path": file.file_path,
+#             })
+#             # results.append((score, file.extract_data.strip()))
 #     finally:
 #         session.close()
-#     top_chunks = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
-#     return "\n\n".join(chunk for _, chunk in top_chunks)
+#     # Take top_k matches only
+#     top_chunks = sorted(results, key=lambda x: x["score"], reverse=True)[:top_k]
+
+#     # Create combined context
+#     combined_context = "\n\n".join(chunk["content"] for chunk in top_chunks)
+
+#     return combined_context, top_chunks
+    # top_chunks = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
+    # return "\n\n".join(chunk for _, chunk in top_chunks)
+def retrieve_kb_context(query: str, kb_ids: List[str], top_k: int = 3) -> str:
+    query_embedding = get_embedding(query)
+    session = SessionLocal()
+    results = []
+    try:
+        kb_files = (
+            session.query(KnowledgeFile)
+            .filter(KnowledgeFile.kb_id.in_(kb_ids))
+            .all()
+        )
+
+        # kb_files = session.query(KnowledgeFile).filter(KnowledgeFile.kb_id == kb_id).all()
+        for file in kb_files:
+            if not file.extract_data:
+                continue
+            emb = file.embedding
+            if isinstance(emb, str):
+                emb = np.array(eval(emb))                
+            score = cosine_similarity(query_embedding, emb)
+            results.append((score, file.extract_data.strip()))
+    finally:
+        session.close()
+    top_chunks = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
+    return "\n\n".join(chunk for _, chunk in top_chunks)
 
 async def hangup_call():
     ctx = get_job_context()
@@ -179,7 +179,7 @@ async def hangup_call():
 # --- Shared State ---
 @dataclass
 class UserData:
-    kb_id: str
+    kb_ids: List[str]
     persona: str
     begin_message: Optional[str] = None
     ctx: Optional[JobContext] = None
@@ -237,7 +237,7 @@ class Assistant(Agent):
     model_settings: ModelSettings
 ) -> AsyncIterable[rtc.AudioFrame]:
         pronunciations = {
-            "API": "A P I", "book": "Booooooks", "REST": "rest", "SQL": "sequel",
+            "API": "A P I", "book": "Books", "REST": "rest", "SQL": "sequel",
             "kubectl": "kube control", "AWS": "A W S", "UI": "U I", "URL": "U R L",
             "npm": "N P M", "LiveKit": "Live Kit", "async": "a sink", "nginx": "engine x",
         }
