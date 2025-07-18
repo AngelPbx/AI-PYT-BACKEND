@@ -1,6 +1,6 @@
 import logging, os, re, json, time, asyncio
 import numpy as np
-from typing import AsyncIterable, Optional
+from typing import AsyncIterable, Optional, List
 from dataclasses import dataclass, field
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
