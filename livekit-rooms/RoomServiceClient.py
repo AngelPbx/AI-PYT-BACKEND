@@ -20,11 +20,8 @@ def load_environment():
         raise EnvironmentError("Could not load .env file")
 
     # Get required environment variables
-<<<<<<< HEAD
     host = os.getenv('LIVEKIT_URL')
-=======
     host = os.getenv('LIVEKIT_HOST')
->>>>>>> arbaz
     api_key = os.getenv('LIVEKIT_API_KEY')
     secret = os.getenv('LIVEKIT_API_SECRET')
 
