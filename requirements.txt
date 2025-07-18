@@ -7,10 +7,10 @@ livekit-agents[deepgram,openai,cartesia,silero,turn-detector]~=1.0
 livekit-plugins-noise-cancellation==0.2.4
 livekit_api==1.0.2
 livekit_protocol==1.0.3
-numpy==2.3.0
+numpy==2.2.6
 openai==1.88.0
 passlib
-psycopg2
+psycopg2-binary
 pydantic[email]
 pydantic
 PyJWT
