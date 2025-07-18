@@ -2713,7 +2713,7 @@ async def create_web_call(
         },
         opt_out_sensitive_data_storage=agent.opt_out_sensitive_data_storage,
         opt_in_signed_url=agent.opt_in_signed_url,
-        start_timestamp=None,
+        start_timestamp=int(time.time() * 1000),
         end_timestamp=None,
         duration_ms=None,
         transcript=None,

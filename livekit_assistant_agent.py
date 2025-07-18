@@ -1,8 +1,8 @@
-import logging, os, re, json, time, httpx
+import logging, os, re, json, time, asyncio
 import numpy as np
 from typing import Optional, List
 from typing import AsyncIterable, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
 from openai import OpenAI
@@ -15,7 +15,8 @@ from livekit.agents import (
 from livekit.plugins import deepgram, openai, silero, noise_cancellation,elevenlabs
 from models.models import KnowledgeFile, PBXLLM, pbx_ai_agent, WebCall
 from db.database import engine
-
+from livekit.agents import ConversationItemAddedEvent
+from livekit.agents.llm import AudioContent
 # agent knowledgebase done
 # voice control done
 # custom function call for sample done
@@ -128,11 +129,23 @@ def retrieve_kb_context(query: str, kb_ids: List[str], top_k: int = 3) -> str:
             if isinstance(emb, str):
                 emb = np.array(eval(emb))
             score = cosine_similarity(query_embedding, emb)
-            results.append((score, file.extract_data.strip()))
+            results.append({
+                "score": score,
+                "content": file.extract_data.strip(),
+                "file_path": file.file_path,
+            })
+            # results.append((score, file.extract_data.strip()))
     finally:
         session.close()
-    top_chunks = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
-    return "\n\n".join(chunk for _, chunk in top_chunks)
+    # Take top_k matches only
+    top_chunks = sorted(results, key=lambda x: x["score"], reverse=True)[:top_k]
+
+    # Create combined context
+    combined_context = "\n\n".join(chunk["content"] for chunk in top_chunks)
+
+    return combined_context, top_chunks
+    # top_chunks = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
+    # return "\n\n".join(chunk for _, chunk in top_chunks)
 # def retrieve_kb_context(query: str, kb_ids: List[str], top_k: int = 3) -> str:
 #     query_embedding = get_embedding(query)
 #     session = SessionLocal()
@@ -177,8 +190,14 @@ class UserData:
     begin_message: Optional[str] = None
     ctx: Optional[JobContext] = None
     start_timestamp: Optional[int] = None
+    retrieved_file_paths: List[dict] = None
+    llm_token_usage: dict = field(default_factory=lambda: {
+        "values": [],
+        "average": 0,
+        "num_requests": 0
+    })  
     def summarize(self) -> str:
-        return f"KB ID: {self.kb_id}, Persona: {self.persona}"
+        return f"KB ID: {self.kb_ids}, Persona: {self.persona}"
 
 # --- Agent ---
 class Assistant(Agent):
@@ -192,7 +211,17 @@ class Assistant(Agent):
         userdata.start_timestamp = int(time.time() * 1000)
         chat_ctx = self.chat_ctx.copy()
 
-        kb_context = retrieve_kb_context("introduction", kb_ids=userdata.kb_ids)
+        # kb_context = retrieve_kb_context("introduction", kb_ids=userdata.kb_ids)
+        kb_context, top_chunks = retrieve_kb_context("introduction", kb_ids=userdata.kb_ids)
+
+        userdata.retrieved_file_paths = [
+            {               
+                "file_path": chunk["file_path"],
+            }
+            for chunk in top_chunks
+            if chunk.get("file_path")  # Only include if file_path is not None
+        ]
+
         if not kb_context:
             kb_context = "No relevant knowledge base data found."
 
@@ -321,6 +350,7 @@ async def entrypoint(ctx: JobContext):
     )
     
     agent = Assistant()
+    
 
     @session.on("user_input_transcribed")
     def on_transcribed(event: UserInputTranscribedEvent):
@@ -336,58 +366,71 @@ async def entrypoint(ctx: JobContext):
         - Chat success
         """
         messages = session_history.get("items", [])
-
-        # Build formatted chat string
         full_chat = "\n".join(
-            f"{item['role'].capitalize()}: {' '.join(item['content'])}"
-            for item in messages
-            if item.get("type") == "message" and item.get("content")
+            f"{'Agent' if msg['role'] == 'assistant' else 'User'}: {' '.join(msg['content'])}"
+            for msg in messages
+            if msg.get("type") == "message" and msg.get("content")
         )
 
         prompt = (
             "You are a call center assistant analytics AI.\n"
-            "Analyze the following conversation and return *only* a JSON object with these keys:\n"
-            "  - chat_summary (1-2 sentence summary of the conversation)\n"
-            "  - user_sentiment (Positive, Neutral, or Negative based on user's tone)\n"
-            "  - chat_successful (true if user query was addressed, false otherwise)\n\n"
-            f"Transcript:\n{full_chat}"
+            "Analyze the following conversation and return ONLY a JSON object with these keys:\n"
+            "- chat_summary (1-2 sentence summary)\n"
+            "- user_sentiment (Positive, Neutral, or Negative)\n"
+            "- chat_successful (true or false)\n\n"
+            f"Transcript:\n{full_chat}\n\n"
+            "Return the JSON object directly without markdown or explanation."
         )
+
         try:
-            response = client.chat.completions.create(
+            response = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "system", "content": prompt}],
                 temperature=0.7,
-                
             )
-        
+        )
+            # 👇 Track token usage
+            try:
+                usage = response.usage  # OpenAI API includes this
+                total_tokens = usage.total_tokens
+            except AttributeError:
+                # fallback if not provided
+                total_tokens = 0
+
+            userdata.llm_token_usage["values"].append(total_tokens)
+            userdata.llm_token_usage["num_requests"] += 1
+
+
             content = response.choices[0].message.content.strip()
-           
-            match = re.search(r'```(?:json)?\s*(\{.*\})\s*```', content, re.DOTALL)
-            if match:
-                json_text = match.group(1)
-            else:
-               
-                json_text = content
 
             try:
-                result = json.loads(json_text)
-            except json.JSONDecodeError as je:
-                logging.error("Failed to parse JSON from analysis response: %s", je)
-                raise
+                result = json.loads(content)
+            except json.JSONDecodeError:
+                # fallback to regex parse if wrapped in ```json``` fences
+                match = re.search(r'```(?:json)?\s*(\{.*\})\s*```', content, re.DOTALL)
+                if match:
+                    result = json.loads(match.group(1))
+                else:
+                    raise ValueError("Response is not valid JSON")
 
             return {
-                "chat_summary":     result.get("chat_summary",     "Summary not available."),
-                "user_sentiment":   result.get("user_sentiment",   "Neutral"),
-                "chat_successful":  bool(result.get("chat_successful", False)),
+                "chat_summary": result.get("chat_summary", "Summary not available."),
+                "user_sentiment": result.get("user_sentiment", "Neutral"),
+                "chat_successful": bool(result.get("chat_successful", False)),
             }
 
+        except asyncio.TimeoutError:
+            logging.error("❌ Chat analysis timed out")
         except Exception as e:
             logging.exception("❌ Chat analysis failed")
-            return {
-                "chat_summary":   "Analysis failed.",
-                "user_sentiment": "Unknown",
-                "chat_successful": False
-            }
+
+        return {
+            "chat_summary": "Analysis failed.",
+            "user_sentiment": "Unknown",
+            "chat_successful": False
+        }
 
     async def write_transcript():
         try:
@@ -410,6 +453,38 @@ async def entrypoint(ctx: JobContext):
                 if msg['type'] == 'message' and 'content' in msg and msg['content']
             ])
             web_call.updated_at = int(time.time() * 1000)
+            web_call.call_status = "ended"
+            values = userdata.llm_token_usage["values"]
+            userdata.llm_token_usage["average"] = (
+                sum(values) / len(values) if values else 0
+            )
+
+            web_call.llm_token_usage = userdata.llm_token_usage
+            if userdata.retrieved_file_paths:
+                file_paths = [item["file_path"] for item in userdata.retrieved_file_paths]
+                web_call.knowledge_base_retrieved_contents_url = ", ".join(file_paths)
+            else:
+                pass
+
+            end_ts = int(time.time() * 1000)
+            if web_call.start_timestamp:
+                web_call.end_timestamp = end_ts
+                web_call.duration_ms = end_ts - web_call.start_timestamp
+            else:
+                # fallback in case start_timestamp wasn't set earlier
+                web_call.start_timestamp = end_ts
+                web_call.end_timestamp = end_ts
+                web_call.duration_ms = 0
+
+            analysis_result = await analyze_chat(transcript_data)
+            web_call.call_analysis = {
+                "in_voicemail": False,  # set to True if detected during call
+                "call_summary": analysis_result.get("chat_summary"),
+                "user_sentiment": analysis_result.get("user_sentiment"),
+                "custom_analysis_data": {},  # optionally extend with custom metrics
+                "call_successful": analysis_result.get("chat_successful"),
+            }
+
 
             db.commit()
 
