@@ -159,11 +159,23 @@ def retrieve_kb_context(query: str, kb_ids: List[str], top_k: int = 3) -> str:
             if isinstance(emb, str):
                 emb = np.array(eval(emb))                
             score = cosine_similarity(query_embedding, emb)
-            results.append((score, file.extract_data.strip()))
+            results.append({
+                "score": score,
+                "content": file.extract_data.strip(),
+                "file_path": file.file_path,
+            })
+            # results.append((score, file.extract_data.strip()))
     finally:
         session.close()
-    top_chunks = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
-    return "\n\n".join(chunk for _, chunk in top_chunks)
+
+    top_chunks = sorted(results, key=lambda x: x["score"], reverse=True)[:top_k]
+
+    # Create combined context
+    combined_context = "\n\n".join(chunk["content"] for chunk in top_chunks)
+
+    return combined_context, top_chunks
+    # top_chunks = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
+    # return "\n\n".join(chunk for _, chunk in top_chunks)
 
 async def hangup_call():
     ctx = get_job_context()
@@ -328,9 +340,9 @@ async def entrypoint(ctx: JobContext):
     begin_message=llm.begin_message
     persona = llm.general_prompt
     kb_ids = llm.knowledge_base_ids or []
-    kb_id = kb_ids[0] if kb_ids else None
+    # kb_id = kb_ids[0] if kb_ids else None
 
-    userdata = UserData(kb_id=kb_id, persona=persona,begin_message=begin_message ,ctx=ctx)
+    userdata = UserData(kb_ids=kb_ids, persona=persona,begin_message=begin_message ,ctx=ctx)
 
 
     session = AgentSession(
