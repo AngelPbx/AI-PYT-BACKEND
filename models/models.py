@@ -83,9 +83,9 @@ class FileStatus(str, enum.Enum):
     failed = "failed"
 
 class SourceStatus(str, enum.Enum):
-    file = "file"
+    document = "document"
     url = "url"
-    txt = "txt"
+    text = "text"
 
 class KnowledgeFile(Base):
     __tablename__ = "knowledge_files"
@@ -95,7 +95,7 @@ class KnowledgeFile(Base):
     file_path = Column(String, nullable=True)
     extract_data = Column(Text, nullable=True)
     status = Column(SqlEnum(FileStatus), default=FileStatus.pending, nullable=False)
-    source_type = Column(SqlEnum(SourceStatus), default=SourceStatus.file, nullable=False)
+    source_type = Column(SqlEnum(SourceStatus), default=SourceStatus.document, nullable=False)
     embedding = Column(ARRAY(Float), nullable=True)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
     knowledge_base = relationship("KnowledgeBase", back_populates="knowledge_files")

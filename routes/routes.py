@@ -870,7 +870,7 @@ async def create_or_update_knowledge_base(
                     extract_data=extract_text,
                     embedding=embedding_vector,
                     status=FileStatus.completed,
-                    source_type=SourceStatus.file  # ✅ updated to new enum
+                    source_type=SourceStatus.document  # ✅ updated to new enum
                 )
                 db.add(kb_file)
                 db.flush() 
@@ -940,7 +940,7 @@ async def create_or_update_knowledge_base(
                     extract_data=content,
                     embedding=embedding_vector,
                     status=FileStatus.completed,
-                    source_type=SourceStatus.txt  # ✅ updated to new enum
+                    source_type=SourceStatus.text  # ✅ updated to new enum
                 )
                 db.add(kb_file)
                 db.flush() 
@@ -1015,13 +1015,9 @@ def list_knowledge_bases(
 
             sources = []
             for kf in knowledge_files:
-                mapped_type = (
-                    "document" if kf.source_type == "file"
-                    else "text" if kf.source_type == "txt"
-                    else kf.source_type
-                )
+                
                 sources.append({
-                    "type": mapped_type,  # file, url, txt
+                    "type": kf.source_type,
                     "source_id": kf.id,
                     "filename": kf.filename,
                     "file_url": kf.file_path
@@ -1085,9 +1081,7 @@ def get_knowledge_base(
         
         sources = [
             {
-                "type": "document" if f.source_type == "file"
-                        else "text" if f.source_type == "txt"
-                        else f.source_type,  # map source_type to string
+                "type": f.source_type, 
                 "source_id": f.id,
                 "filename": f.filename,
                 "file_url": f.file_path
@@ -2757,7 +2751,7 @@ async def create_web_call(
         user_id=new_web_call.user_id,
         call_id=new_web_call.call_id,
         agent_id=new_web_call.agent_id,
-        agent_name=agent.name,
+        agent_name=new_web_call.agent.name,
         agent_version=new_web_call.agent_version,
         call_status=new_web_call.call_status,
         call_metadata=new_web_call.call_metadata,
@@ -2799,19 +2793,7 @@ def get_web_call_by_id(
 ):
     # Fetch WebCall record from DB
     web_call = db.query(WebCall).filter(WebCall.call_id == call_id).first()
-    # Fetch agent details from pbx_ai_agent table
-    agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == web_call.agent_id).first()
    
-    if not agent:
-        return JSONResponse(
-            status_code=404,
-            content={
-                "status": False,
-                "message": "Agent not found",
-                "data": None
-            }
-        )
-    
     if not web_call:
         return JSONResponse(
             status_code=404,
@@ -2828,7 +2810,7 @@ def get_web_call_by_id(
         access_token=web_call.access_token,
         call_id=web_call.call_id,
         agent_id=web_call.agent_id,
-        agent_name=agent.name if agent.name else None,  # Assuming relationship
+        agent_name=web_call.agent.name,
         agent_version=web_call.agent_version,
         call_status=web_call.call_status,
         call_metadata=web_call.call_metadata,
@@ -2882,7 +2864,6 @@ def get_webcalls_by_user_id(user_id: int, db: Session = Depends(get_db)):
     data = []
     for wc in web_calls:
         # Fetch agent name directly via relationship
-        agent_name = wc.agent.name if wc.agent and wc.agent.name else None
 
         data.append({
             "call_type": wc.call_type,
@@ -2890,7 +2871,7 @@ def get_webcalls_by_user_id(user_id: int, db: Session = Depends(get_db)):
             "access_token": wc.access_token,
             "call_id": wc.call_id,
             "agent_id": wc.agent_id,
-            "agent_name": agent_name,
+            "agent_name": wc.agent.name,
             "agent_version": wc.agent_version,
             "call_status": wc.call_status,
             "call_metadata": wc.call_metadata,
