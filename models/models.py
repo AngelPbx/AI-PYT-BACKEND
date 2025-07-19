@@ -265,7 +265,10 @@ class WebCall(Base):
     call_cost = Column(JSON, nullable=True)
     llm_token_usage = Column(JSON, nullable=True)
     created_at = Column(BigInteger, default=lambda: int(time.time() * 1000))
-    updated_at = Column(BigInteger, default=lambda: int(time.time() * 1000))    
+    updated_at = Column(BigInteger, default=lambda: int(time.time() * 1000))  
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Add this line
+    user = relationship("User", backref="web_calls")  # Add this line
+  
 
 class PhoneNumber(Base):
     __tablename__ = "phone_numbers"

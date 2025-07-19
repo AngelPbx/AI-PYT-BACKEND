@@ -2652,7 +2652,6 @@ async def create_web_call(
         )
     # Generate unique call_id and access_token
     call_id = uuid.uuid4().hex
-    print(f"Creating web call with ID 🔥: {call_id}")
     # 🔥 LiveKit credentials from .env
     LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
     LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
@@ -2675,7 +2674,7 @@ async def create_web_call(
                 max_participants=10
             )
         )
-        print(f"LiveKit Room '{call_id}' created successfully.")
+        
     except Exception as e:
         if "already exists" not in str(e):
             raise HTTPException(status_code=500, detail=f"LiveKit Error: {e}")
@@ -2692,6 +2691,7 @@ async def create_web_call(
     # Create WebCall DB record
     new_web_call = WebCall(
         call_type="web_call",
+        user_id=current_user.id,
         call_id=call_id,  # ✅ Set call_id here
         access_token=token.to_jwt(),
         agent_id=agent.id,
@@ -2754,6 +2754,7 @@ async def create_web_call(
     data = WebCallResponse(
         call_type=new_web_call.call_type,
         access_token=new_web_call.access_token,
+        user_id=new_web_call.user_id,
         call_id=new_web_call.call_id,
         agent_id=new_web_call.agent_id,
         agent_name=agent.name,
@@ -2820,11 +2821,10 @@ def get_web_call_by_id(
                 "data": None
             }
         )
-       
-
     # Prepare response
     data = WebCallResponse(
         call_type=web_call.call_type,
+        user_id=web_call.user_id,
         access_token=web_call.access_token,
         call_id=web_call.call_id,
         agent_id=web_call.agent_id,
