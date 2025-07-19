@@ -16,7 +16,7 @@ import time,json
 from livekit import api
 from typing import List, Optional
 from twilio.rest import Client
-
+from twilio.base.exceptions import TwilioRestException
 from sqlalchemy.orm import sessionmaker, Session
 from db.database import get_db, get_current_user
 from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, KnowledgeFile, APIKey, FileStatus, SourceStatus, 
@@ -2905,9 +2905,6 @@ def get_webcalls_by_user_id(user_id: int, db: Session = Depends(get_db)):
         }
     )
 
-# /// twilio
-
-from twilio.base.exceptions import TwilioRestException
 
 # Twilio credentials from environment variables
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
