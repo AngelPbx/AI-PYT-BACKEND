@@ -14,6 +14,8 @@ app = FastAPI()
 app.include_router(router)
 
 # Create database tables
+# Base.metadata.drop_all(bind=engine)
+
 Base.metadata.create_all(bind=engine)
 
 app.mount("/files", StaticFiles(directory="uploads"), name="files")

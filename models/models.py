@@ -83,9 +83,9 @@ class FileStatus(str, enum.Enum):
     failed = "failed"
 
 class SourceStatus(str, enum.Enum):
-    file = "file"
+    document = "document"
     url = "url"
-    txt = "txt"
+    text = "text"
 
 class KnowledgeFile(Base):
     __tablename__ = "knowledge_files"
@@ -95,7 +95,7 @@ class KnowledgeFile(Base):
     file_path = Column(String, nullable=True)
     extract_data = Column(Text, nullable=True)
     status = Column(SqlEnum(FileStatus), default=FileStatus.pending, nullable=False)
-    source_type = Column(SqlEnum(SourceStatus), default=SourceStatus.file, nullable=False)
+    source_type = Column(SqlEnum(SourceStatus), default=SourceStatus.document, nullable=False)
     embedding = Column(ARRAY(Float), nullable=True)
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
     knowledge_base = relationship("KnowledgeBase", back_populates="knowledge_files")
@@ -241,7 +241,8 @@ class WebCall(Base):
     call_type = Column(String, default="web_call", nullable=False)
     access_token = Column(Text, nullable=False)
     call_id = Column(String, unique=True, nullable=False)
-    agent_id = Column(String, nullable=False)
+    agent_id = Column(String, ForeignKey("pbx_ai_agent.id"), nullable=False)  # 🔥 link agent_id to pbx_ai_agent.id
+    agent = relationship("pbx_ai_agent", backref="web_calls")  # 🔥 relationship to pbx_ai_agent
     agent_version = Column(Integer, nullable=True)
     call_status = Column(String, nullable=False, default="registered")
     call_metadata = Column(JSON, nullable=True)
@@ -265,7 +266,10 @@ class WebCall(Base):
     call_cost = Column(JSON, nullable=True)
     llm_token_usage = Column(JSON, nullable=True)
     created_at = Column(BigInteger, default=lambda: int(time.time() * 1000))
-    updated_at = Column(BigInteger, default=lambda: int(time.time() * 1000))    
+    updated_at = Column(BigInteger, default=lambda: int(time.time() * 1000))  
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # Add this line
+    user = relationship("User", backref="web_calls")  # Add this line
+  
 
 class PhoneNumber(Base):
     __tablename__ = "phone_numbers"

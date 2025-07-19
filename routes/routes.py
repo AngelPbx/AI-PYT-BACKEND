@@ -16,7 +16,7 @@ import time,json
 from livekit import api
 from typing import List, Optional
 from twilio.rest import Client
-
+from twilio.base.exceptions import TwilioRestException
 from sqlalchemy.orm import sessionmaker, Session
 from db.database import get_db, get_current_user
 from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, KnowledgeFile, APIKey, FileStatus, SourceStatus, 
@@ -870,7 +870,7 @@ async def create_or_update_knowledge_base(
                     extract_data=extract_text,
                     embedding=embedding_vector,
                     status=FileStatus.completed,
-                    source_type=SourceStatus.file  # ✅ updated to new enum
+                    source_type=SourceStatus.document  # ✅ updated to new enum
                 )
                 db.add(kb_file)
                 db.flush() 
@@ -940,7 +940,7 @@ async def create_or_update_knowledge_base(
                     extract_data=content,
                     embedding=embedding_vector,
                     status=FileStatus.completed,
-                    source_type=SourceStatus.txt  # ✅ updated to new enum
+                    source_type=SourceStatus.text  # ✅ updated to new enum
                 )
                 db.add(kb_file)
                 db.flush() 
@@ -1015,13 +1015,9 @@ def list_knowledge_bases(
 
             sources = []
             for kf in knowledge_files:
-                mapped_type = (
-                    "document" if kf.source_type == "file"
-                    else "text" if kf.source_type == "txt"
-                    else kf.source_type
-                )
+                
                 sources.append({
-                    "type": mapped_type,  # file, url, txt
+                    "type": kf.source_type,
                     "source_id": kf.id,
                     "filename": kf.filename,
                     "file_url": kf.file_path
@@ -1085,9 +1081,7 @@ def get_knowledge_base(
         
         sources = [
             {
-                "type": "document" if f.source_type == "file"
-                        else "text" if f.source_type == "txt"
-                        else f.source_type,  # map source_type to string
+                "type": f.source_type, 
                 "source_id": f.id,
                 "filename": f.filename,
                 "file_url": f.file_path
@@ -2652,7 +2646,6 @@ async def create_web_call(
         )
     # Generate unique call_id and access_token
     call_id = uuid.uuid4().hex
-    print(f"Creating web call with ID 🔥: {call_id}")
     # 🔥 LiveKit credentials from .env
     LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
     LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
@@ -2675,7 +2668,7 @@ async def create_web_call(
                 max_participants=10
             )
         )
-        print(f"LiveKit Room '{call_id}' created successfully.")
+        
     except Exception as e:
         if "already exists" not in str(e):
             raise HTTPException(status_code=500, detail=f"LiveKit Error: {e}")
@@ -2692,6 +2685,7 @@ async def create_web_call(
     # Create WebCall DB record
     new_web_call = WebCall(
         call_type="web_call",
+        user_id=current_user.id,
         call_id=call_id,  # ✅ Set call_id here
         access_token=token.to_jwt(),
         agent_id=agent.id,
@@ -2754,9 +2748,10 @@ async def create_web_call(
     data = WebCallResponse(
         call_type=new_web_call.call_type,
         access_token=new_web_call.access_token,
+        user_id=new_web_call.user_id,
         call_id=new_web_call.call_id,
         agent_id=new_web_call.agent_id,
-        agent_name=agent.name,
+        agent_name=new_web_call.agent.name,
         agent_version=new_web_call.agent_version,
         call_status=new_web_call.call_status,
         call_metadata=new_web_call.call_metadata,
@@ -2798,19 +2793,7 @@ def get_web_call_by_id(
 ):
     # Fetch WebCall record from DB
     web_call = db.query(WebCall).filter(WebCall.call_id == call_id).first()
-    # Fetch agent details from pbx_ai_agent table
-    agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == web_call.agent_id).first()
    
-    if not agent:
-        return JSONResponse(
-            status_code=404,
-            content={
-                "status": False,
-                "message": "Agent not found",
-                "data": None
-            }
-        )
-    
     if not web_call:
         return JSONResponse(
             status_code=404,
@@ -2820,15 +2803,14 @@ def get_web_call_by_id(
                 "data": None
             }
         )
-       
-
     # Prepare response
     data = WebCallResponse(
         call_type=web_call.call_type,
+        user_id=web_call.user_id,
         access_token=web_call.access_token,
         call_id=web_call.call_id,
         agent_id=web_call.agent_id,
-        agent_name=agent.name if agent.name else None,  # Assuming relationship
+        agent_name=web_call.agent.name,
         agent_version=web_call.agent_version,
         call_status=web_call.call_status,
         call_metadata=web_call.call_metadata,
@@ -2862,20 +2844,67 @@ def get_web_call_by_id(
         }
     )
 
-# import os
-# from twilio.rest import Client
+@router.get("/webcalls/user/{user_id}")
+def get_webcalls_by_user_id(user_id: int, db: Session = Depends(get_db)):
+    """
+    Fetch all WebCall records for a specific user_id and return custom JSON response
+    """
+    web_calls = db.query(WebCall).filter(WebCall.user_id == user_id).all()
 
-# account_sid = os.environ["AC0d8d96e8bec0d573804a160bd96483b3"]
-# auth_token = os.environ["d55c8e547b69bbcb34cfc27bc7bc155f"]
-# client = Client(account_sid, auth_token)
+    if not web_calls:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": False,
+                "message": "No WebCalls found for this user.",
+                "data": []
+            }
+        )
 
-# incoming_phone_number = client.incoming_phone_numbers.create(
-#     phone_number="+14155552344"
-# )
+    data = []
+    for wc in web_calls:
+        # Fetch agent name directly via relationship
 
-# print(incoming_phone_number.account_sid)
+        data.append({
+            "call_type": wc.call_type,
+            "user_id": wc.user_id,
+            "access_token": wc.access_token,
+            "call_id": wc.call_id,
+            "agent_id": wc.agent_id,
+            "agent_name": wc.agent.name,
+            "agent_version": wc.agent_version,
+            "call_status": wc.call_status,
+            "call_metadata": wc.call_metadata,
+            "retell_llm_dynamic_variables": wc.retell_llm_dynamic_variables,
+            "collected_dynamic_variables": wc.collected_dynamic_variables,
+            "custom_sip_headers": wc.custom_sip_headers,
+            "opt_out_sensitive_data_storage": wc.opt_out_sensitive_data_storage,
+            "opt_in_signed_url": wc.opt_in_signed_url,
+            "start_timestamp": wc.start_timestamp,
+            "end_timestamp": wc.end_timestamp,
+            "duration_ms": wc.duration_ms,
+            "transcript": wc.transcript,
+            "transcript_object": wc.transcript_object,
+            "transcript_with_tool_calls": wc.transcript_with_tool_calls,
+            "recording_url": wc.recording_url,
+            "public_log_url": wc.public_log_url,
+            "knowledge_base_retrieved_contents_url": wc.knowledge_base_retrieved_contents_url,
+            "latency": wc.latency,
+            "disconnection_reason": wc.disconnection_reason,
+            "call_analysis": wc.call_analysis,
+            "call_cost": wc.call_cost,
+            "llm_token_usage": wc.llm_token_usage
+        })
 
-from twilio.base.exceptions import TwilioRestException
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": True,
+            "message": "WebCalls fetched successfully",
+            "data": data
+        }
+    )
+
 
 # Twilio credentials from environment variables
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")

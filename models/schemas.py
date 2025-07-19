@@ -496,6 +496,7 @@ class CallCost(BaseModel):
 
 class WebCallResponse(BaseModel):
     call_type: str
+    user_id: int
     access_token: str
     call_id: str
     agent_id: str
