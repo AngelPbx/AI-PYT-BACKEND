@@ -241,7 +241,8 @@ class WebCall(Base):
     call_type = Column(String, default="web_call", nullable=False)
     access_token = Column(Text, nullable=False)
     call_id = Column(String, unique=True, nullable=False)
-    agent_id = Column(String, nullable=False)
+    agent_id = Column(String, ForeignKey("pbx_ai_agent.id"), nullable=False)  # 🔥 link agent_id to pbx_ai_agent.id
+    agent = relationship("pbx_ai_agent", backref="web_calls")  # 🔥 relationship to pbx_ai_agent
     agent_version = Column(Integer, nullable=True)
     call_status = Column(String, nullable=False, default="registered")
     call_metadata = Column(JSON, nullable=True)
