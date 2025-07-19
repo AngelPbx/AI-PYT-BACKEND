@@ -2862,18 +2862,69 @@ def get_web_call_by_id(
         }
     )
 
-# import os
-# from twilio.rest import Client
+@router.get("/webcalls/user/{user_id}")
+def get_webcalls_by_user_id(user_id: int, db: Session = Depends(get_db)):
+    """
+    Fetch all WebCall records for a specific user_id and return custom JSON response
+    """
+    web_calls = db.query(WebCall).filter(WebCall.user_id == user_id).all()
 
-# account_sid = os.environ["AC0d8d96e8bec0d573804a160bd96483b3"]
-# auth_token = os.environ["d55c8e547b69bbcb34cfc27bc7bc155f"]
-# client = Client(account_sid, auth_token)
+    if not web_calls:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": False,
+                "message": "No WebCalls found for this user.",
+                "data": []
+            }
+        )
 
-# incoming_phone_number = client.incoming_phone_numbers.create(
-#     phone_number="+14155552344"
-# )
+    data = []
+    for wc in web_calls:
+        # Fetch agent name directly via relationship
+        agent_name = wc.agent.name if wc.agent and wc.agent.name else None
 
-# print(incoming_phone_number.account_sid)
+        data.append({
+            "call_type": wc.call_type,
+            "user_id": wc.user_id,
+            "access_token": wc.access_token,
+            "call_id": wc.call_id,
+            "agent_id": wc.agent_id,
+            "agent_name": agent_name,
+            "agent_version": wc.agent_version,
+            "call_status": wc.call_status,
+            "call_metadata": wc.call_metadata,
+            "retell_llm_dynamic_variables": wc.retell_llm_dynamic_variables,
+            "collected_dynamic_variables": wc.collected_dynamic_variables,
+            "custom_sip_headers": wc.custom_sip_headers,
+            "opt_out_sensitive_data_storage": wc.opt_out_sensitive_data_storage,
+            "opt_in_signed_url": wc.opt_in_signed_url,
+            "start_timestamp": wc.start_timestamp,
+            "end_timestamp": wc.end_timestamp,
+            "duration_ms": wc.duration_ms,
+            "transcript": wc.transcript,
+            "transcript_object": wc.transcript_object,
+            "transcript_with_tool_calls": wc.transcript_with_tool_calls,
+            "recording_url": wc.recording_url,
+            "public_log_url": wc.public_log_url,
+            "knowledge_base_retrieved_contents_url": wc.knowledge_base_retrieved_contents_url,
+            "latency": wc.latency,
+            "disconnection_reason": wc.disconnection_reason,
+            "call_analysis": wc.call_analysis,
+            "call_cost": wc.call_cost,
+            "llm_token_usage": wc.llm_token_usage
+        })
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": True,
+            "message": "WebCalls fetched successfully",
+            "data": data
+        }
+    )
+
+# /// twilio
 
 from twilio.base.exceptions import TwilioRestException
 
