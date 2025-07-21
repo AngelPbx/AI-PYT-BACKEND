@@ -2749,7 +2749,8 @@ def get_webcalls_by_user_id(
     user_id: int, 
     from_date: Optional[datetime] = Query(None, description="Start date (YYYY-MM-DD)"),
     to_date: Optional[datetime] = Query(None, description="End date (YYYY-MM-DD)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
     ):
     """
     Fetch all WebCall records for a specific user_id and return custom JSON response
@@ -2825,7 +2826,8 @@ def get_webcalls_by_user_id(
 @router.delete("/delete-call/{call_id}")
 def delete_web_call(
     call_id: str, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
     ):
     query = db.get(WebCall, call_id)
     if not query:
