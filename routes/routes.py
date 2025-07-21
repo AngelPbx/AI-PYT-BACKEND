@@ -2822,6 +2822,36 @@ def get_webcalls_by_user_id(
         }
     )
 
+@router.delete("/delete-call/{call_id}")
+def delete_web_call(
+    call_id: str, 
+    db: Session = Depends(get_db)
+    ):
+    query = db.get(WebCall, call_id)
+    if not query:
+        return JSONResponse(
+            status=404,
+            content={
+                "status":False,
+                "message":"WebCall not found",
+                "data": None
+            }
+        )
+    db.delete(query)
+    db.commit()
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": True,
+            "message": "WebCall deleted successfully",
+            "data": None
+        }
+    )
+    
+    
+    
+
+
 
 # Twilio credentials from environment variables
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
