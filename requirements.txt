@@ -1,6 +1,7 @@
 aiohttp==3.12.13
 beautifulsoup4==4.13.4
 fastapi==0.115.13
+itsdangerous==2.2.0
 jose==1.0.0
 livekit==1.0.9
 livekit-agents[deepgram,openai,cartesia,silero,turn-detector]==1.1.6
@@ -23,5 +24,6 @@ PyMuPDF==1.26.3
 requests==2.32.4
 SQLAlchemy==2.0.41
 starlette==0.46.2
+twilio==9.6.5
 uvicorn==0.35.0
 bcrypt==4.3.0
