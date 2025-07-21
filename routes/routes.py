@@ -16,7 +16,7 @@ import time,json
 from livekit import api
 from typing import List, Optional
 from twilio.rest import Client
-
+from twilio.base.exceptions import TwilioRestException
 from sqlalchemy.orm import sessionmaker, Session
 from db.database import get_db, get_current_user
 from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember, KnowledgeBase, KnowledgeFile, APIKey, FileStatus, SourceStatus, 
@@ -25,7 +25,7 @@ from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember,
 from models.schemas import ( UserSignup, UserLogin, UpdateUser,DispatchRequest,CreateRoomRequestSchema,WebCallResponse,WebCallCreateRequest,GetPBXLLMOut,
                                 WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, 
                                 CreateChatRequest, CreateChatResponse, VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut, APIResponse, PhoneNumberRequest, 
-                                Response, AgentUpdate
+                                Response, AgentUpdate, UpdateCallMetadata
                      )
 from utils.helpers import (
     format_response, validate_email,
@@ -870,7 +870,7 @@ async def create_or_update_knowledge_base(
                     extract_data=extract_text,
                     embedding=embedding_vector,
                     status=FileStatus.completed,
-                    source_type=SourceStatus.file  # ✅ updated to new enum
+                    source_type=SourceStatus.document  # ✅ updated to new enum
                 )
                 db.add(kb_file)
                 db.flush() 
@@ -940,7 +940,7 @@ async def create_or_update_knowledge_base(
                     extract_data=content,
                     embedding=embedding_vector,
                     status=FileStatus.completed,
-                    source_type=SourceStatus.txt  # ✅ updated to new enum
+                    source_type=SourceStatus.text  # ✅ updated to new enum
                 )
                 db.add(kb_file)
                 db.flush() 
@@ -1015,13 +1015,9 @@ def list_knowledge_bases(
 
             sources = []
             for kf in knowledge_files:
-                mapped_type = (
-                    "document" if kf.source_type == "file"
-                    else "text" if kf.source_type == "txt"
-                    else kf.source_type
-                )
+                
                 sources.append({
-                    "type": mapped_type,  # file, url, txt
+                    "type": kf.source_type,
                     "source_id": kf.id,
                     "filename": kf.filename,
                     "file_url": kf.file_path
@@ -1085,9 +1081,7 @@ def get_knowledge_base(
         
         sources = [
             {
-                "type": "document" if f.source_type == "file"
-                        else "text" if f.source_type == "txt"
-                        else f.source_type,  # map source_type to string
+                "type": f.source_type, 
                 "source_id": f.id,
                 "filename": f.filename,
                 "file_url": f.file_path
@@ -1624,107 +1618,7 @@ def set_webhook_api_key(
 
 __all__ = ['router']
 
-# Agent apis--------------------------------------------------
 
-# @router.post("/agents")
-# def create_agent(
-#     payload: AgentCreate,
-#     db: Session = Depends(get_db),
-#     current_user: User = Depends(get_current_user)
-# ):
-#     if not is_user_in_workspace(current_user.id, payload.workspace_id, db):
-#         raise HTTPException(status_code=403, detail="You do not have access to this workspace")
-
-#     new_agent = pbx_ai_agent(
-#         workspace_id=payload.workspace_id,
-#         name=payload.agent_name,
-#         voice_id=payload.voice_id,
-#         voice_model=payload.voice_model,
-#         fallback_voice_ids=payload.fallback_voice_ids,
-#         voice_temperature=payload.voice_temperature,
-#         voice_speed=payload.voice_speed,
-#         volume=payload.volume,
-#         responsiveness=payload.responsiveness,
-#         interruption_sensitivity=payload.interruption_sensitivity,
-#         enable_backchannel=payload.enable_backchannel,
-#         backchannel_frequency=payload.backchannel_frequency,
-#         backchannel_words=payload.backchannel_words,
-#         reminder_trigger_ms=payload.reminder_trigger_ms,
-#         reminder_max_count=payload.reminder_max_count,
-#         ambient_sound=payload.ambient_sound,
-#         ambient_sound_volume=payload.ambient_sound_volume,
-#         language=payload.language,
-#         webhook_url=payload.webhook_url,
-#         boosted_keywords=payload.boosted_keywords,
-#         opt_out_sensitive_data_storage=payload.opt_out_sensitive_data_storage,
-#         opt_in_signed_url=payload.opt_in_signed_url,
-#         pronunciation_dictionary=[
-#             p.model_dump() for p in payload.pronunciation_dictionary
-#         ] if payload.pronunciation_dictionary else None,
-#         normalize_for_speech=payload.normalize_for_speech,
-#         end_call_after_silence_ms=payload.end_call_after_silence_ms,
-#         max_call_duration_ms=payload.max_call_duration_ms,
-#         voicemail_option=payload.voicemail_option.model_dump() if payload.voicemail_option else None,
-#         post_call_analysis_data=[
-#             a.model_dump() for a in payload.post_call_analysis_data
-#         ] if payload.post_call_analysis_data else None,
-#         post_call_analysis_model=payload.post_call_analysis_model,
-#         begin_message_delay_ms=payload.begin_message_delay_ms,
-#         ring_duration_ms=payload.ring_duration_ms,
-#         stt_mode=payload.stt_mode,
-#         vocab_specialization=payload.vocab_specialization,
-#         allow_user_dtmf=payload.allow_user_dtmf,
-#         user_dtmf_options=payload.user_dtmf_options.model_dump() if payload.user_dtmf_options else None,
-#         denoising_mode=payload.denoising_mode,
-#         response_engine=payload.response_engine.model_dump() if payload.response_engine else None,
-#         version=payload.version,
-#         last_modification_timestamp=int(time.time() * 1000),
-#     )
-
-
-
-#     db.add(new_agent)
-#     db.commit()
-#     db.refresh(new_agent)
-
-#     response_data = {
-#         "agent_id": f"{new_agent.id}",
-#         "last_modification_timestamp": new_agent.last_modification_timestamp,
-#         "agent_name": new_agent.name,
-#         "response_engine": new_agent.response_engine,
-#         "language": new_agent.language,
-#         "opt_out_sensitive_data_storage": new_agent.opt_out_sensitive_data_storage,
-#         "opt_in_signed_url": new_agent.opt_in_signed_url,
-#         "end_call_after_silence_ms": new_agent.end_call_after_silence_ms,
-#         "version": new_agent.version,
-#         "is_published": new_agent.is_published,
-#         "post_call_analysis_model": new_agent.post_call_analysis_model,
-#         "voice_id": new_agent.voice_id,
-#         "voice_model": new_agent.voice_model,
-#         "voice_temperature": new_agent.voice_temperature,
-#         "voice_speed": new_agent.voice_speed,
-#         "volume": new_agent.volume,
-#         "enable_backchannel": new_agent.enable_backchannel,
-#         "backchannel_frequency": new_agent.backchannel_frequency,
-#         "reminder_trigger_ms": new_agent.reminder_trigger_ms,
-#         "reminder_max_count": new_agent.reminder_max_count,
-#         "max_call_duration_ms": new_agent.max_call_duration_ms,
-#         "interruption_sensitivity": new_agent.interruption_sensitivity,
-#         "ambient_sound_volume": new_agent.ambient_sound_volume,
-#         "responsiveness": new_agent.responsiveness,
-#         "normalize_for_speech": new_agent.normalize_for_speech,
-#         "begin_message_delay_ms": new_agent.begin_message_delay_ms,
-#         "ring_duration_ms": new_agent.ring_duration_ms,
-#         "stt_mode": new_agent.stt_mode,
-#         "allow_user_dtmf": new_agent.allow_user_dtmf,
-#         "user_dtmf_options": new_agent.user_dtmf_options,
-#         "denoising_mode": new_agent.denoising_mode
-#     }
-
-#     return {
-#         "status": True,
-#         "data": response_data
-#     }
 
 @router.post("/agents")
 def create_agent(
@@ -2652,7 +2546,6 @@ async def create_web_call(
         )
     # Generate unique call_id and access_token
     call_id = uuid.uuid4().hex
-    print(f"Creating web call with ID 🔥: {call_id}")
     # 🔥 LiveKit credentials from .env
     LIVEKIT_API_KEY = os.getenv("LIVEKIT_API_KEY")
     LIVEKIT_API_SECRET = os.getenv("LIVEKIT_API_SECRET")
@@ -2675,7 +2568,7 @@ async def create_web_call(
                 max_participants=10
             )
         )
-        print(f"LiveKit Room '{call_id}' created successfully.")
+        
     except Exception as e:
         if "already exists" not in str(e):
             raise HTTPException(status_code=500, detail=f"LiveKit Error: {e}")
@@ -2692,6 +2585,7 @@ async def create_web_call(
     # Create WebCall DB record
     new_web_call = WebCall(
         call_type="web_call",
+        user_id=current_user.id,
         call_id=call_id,  # ✅ Set call_id here
         access_token=token.to_jwt(),
         agent_id=agent.id,
@@ -2754,9 +2648,10 @@ async def create_web_call(
     data = WebCallResponse(
         call_type=new_web_call.call_type,
         access_token=new_web_call.access_token,
+        user_id=new_web_call.user_id,
         call_id=new_web_call.call_id,
         agent_id=new_web_call.agent_id,
-        agent_name=agent.name,
+        agent_name=new_web_call.agent.name,
         agent_version=new_web_call.agent_version,
         call_status=new_web_call.call_status,
         call_metadata=new_web_call.call_metadata,
@@ -2798,19 +2693,7 @@ def get_web_call_by_id(
 ):
     # Fetch WebCall record from DB
     web_call = db.query(WebCall).filter(WebCall.call_id == call_id).first()
-    # Fetch agent details from pbx_ai_agent table
-    agent = db.query(pbx_ai_agent).filter(pbx_ai_agent.id == web_call.agent_id).first()
    
-    if not agent:
-        return JSONResponse(
-            status_code=404,
-            content={
-                "status": False,
-                "message": "Agent not found",
-                "data": None
-            }
-        )
-    
     if not web_call:
         return JSONResponse(
             status_code=404,
@@ -2820,15 +2703,14 @@ def get_web_call_by_id(
                 "data": None
             }
         )
-       
-
     # Prepare response
     data = WebCallResponse(
         call_type=web_call.call_type,
+        user_id=web_call.user_id,
         access_token=web_call.access_token,
         call_id=web_call.call_id,
         agent_id=web_call.agent_id,
-        agent_name=agent.name if agent.name else None,  # Assuming relationship
+        agent_name=web_call.agent.name,
         agent_version=web_call.agent_version,
         call_status=web_call.call_status,
         call_metadata=web_call.call_metadata,
@@ -2862,20 +2744,156 @@ def get_web_call_by_id(
         }
     )
 
-# import os
-# from twilio.rest import Client
+@router.get("/list-calls/{user_id}")
+def get_webcalls_by_user_id(
+    user_id: int, 
+    from_date: Optional[datetime] = Query(None, description="Start date (YYYY-MM-DD)"),
+    to_date: Optional[datetime] = Query(None, description="End date (YYYY-MM-DD)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+    ):
+    """
+    Fetch all WebCall records for a specific user_id and return custom JSON response
+    """
+    # web_calls = db.query(WebCall).filter(WebCall.user_id == user_id).all()
+    query = db.query(WebCall).filter(WebCall.user_id == user_id)
 
-# account_sid = os.environ["AC0d8d96e8bec0d573804a160bd96483b3"]
-# auth_token = os.environ["d55c8e547b69bbcb34cfc27bc7bc155f"]
-# client = Client(account_sid, auth_token)
+    # Apply date filters on start_timestamp
+    if from_date:
+        from_ts = int(from_date.timestamp() * 1000)  # convert to ms
+        query = query.filter(WebCall.start_timestamp >= from_ts)
+    if to_date:
+        to_ts = int(to_date.timestamp() * 1000)  # convert to ms
+        query = query.filter(WebCall.start_timestamp <= to_ts)
 
-# incoming_phone_number = client.incoming_phone_numbers.create(
-#     phone_number="+14155552344"
-# )
+    web_calls = query.all()
 
-# print(incoming_phone_number.account_sid)
 
-from twilio.base.exceptions import TwilioRestException
+    if not web_calls:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status": False,
+                "message": "No WebCalls found for this user.",
+                "data": []
+            }
+        )
+
+    data = []
+    for wc in web_calls:
+        # Fetch agent name directly via relationship
+
+        data.append({
+            "call_type": wc.call_type,
+            "user_id": wc.user_id,
+            "access_token": wc.access_token,
+            "call_id": wc.call_id,
+            "agent_id": wc.agent_id,
+            "agent_name": wc.agent.name,
+            "agent_version": wc.agent_version,
+            "call_status": wc.call_status,
+            "call_metadata": wc.call_metadata,
+            "retell_llm_dynamic_variables": wc.retell_llm_dynamic_variables,
+            "collected_dynamic_variables": wc.collected_dynamic_variables,
+            "custom_sip_headers": wc.custom_sip_headers,
+            "opt_out_sensitive_data_storage": wc.opt_out_sensitive_data_storage,
+            "opt_in_signed_url": wc.opt_in_signed_url,
+            "start_timestamp": wc.start_timestamp,
+            "end_timestamp": wc.end_timestamp,
+            "duration_ms": wc.duration_ms,
+            "transcript": wc.transcript,
+            "transcript_object": wc.transcript_object,
+            "transcript_with_tool_calls": wc.transcript_with_tool_calls,
+            "recording_url": wc.recording_url,
+            "public_log_url": wc.public_log_url,
+            "knowledge_base_retrieved_contents_url": wc.knowledge_base_retrieved_contents_url,
+            "latency": wc.latency,
+            "disconnection_reason": wc.disconnection_reason,
+            "call_analysis": wc.call_analysis,
+            "call_cost": wc.call_cost,
+            "llm_token_usage": wc.llm_token_usage
+        })
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": True,
+            "message": "WebCalls fetched successfully",
+            "data": data
+        }
+    )
+
+@router.patch("/update-call/{call_id}")
+def update_call_metadata(
+    call_id: str,
+    payload: UpdateCallMetadata,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update call_metadata and optionally opt_out_sensitive_data_storage for a specific WebCall
+    """
+
+    # 🔍 Fetch WebCall
+    web_call = db.query(WebCall).filter(WebCall.call_id == call_id).first()
+    if not web_call:
+        raise HTTPException(status_code=404, detail="WebCall not found")
+    LIVEKIT_URL = os.getenv("LIVEKIT_URL")
+    # ✅ Merge payload.metadata with livekit_url
+    updated_metadata = payload.metadata or {}
+    updated_metadata["livekit_url"] = LIVEKIT_URL
+
+    # 💾 Save merged metadata
+    web_call.call_metadata = updated_metadata
+
+    # ✅ Optionally update opt_out_sensitive_data_storage
+    if payload.opt_out_sensitive_data_storage is not None:
+        web_call.opt_out_sensitive_data_storage = payload.opt_out_sensitive_data_storage
+
+    # 💾 Commit changes
+    db.commit()
+    db.refresh(web_call)  # Refresh object to get updated state
+
+    # 📦 Serialize full WebCall response
+    response_data = WebCallResponse.from_orm(web_call).dict()
+
+    return {
+        "status": True,
+        "message": "WebCall metadata updated successfully",
+        "data": response_data
+    }
+
+@router.delete("/delete-call/{call_id}")
+def delete_web_call(
+    call_id: str, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+    ):
+    query = db.query(WebCall).filter(WebCall.call_id == call_id).first()
+    if not query:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "status":False,
+                "message":"WebCall not found",
+                "data": None
+            }
+        )
+    db.delete(query)
+    db.commit()
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": True,
+            "message": "WebCall deleted successfully",
+            "data": None
+        }
+    )
+    
+    
+    
+
+
 
 # Twilio credentials from environment variables
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
