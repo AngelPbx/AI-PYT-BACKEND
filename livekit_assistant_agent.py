@@ -240,9 +240,7 @@ class Assistant(Agent):
 
         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
             async for chunk in input_text:
-                logging.info(f"Processing chunk: {userdata.pronunciations.items()}")
                 for term, phoneme in userdata.pronunciations.items():
-                    logging.info(f"Replacing '{term}' with '{phoneme}' in chunk")
                     chunk = re.sub(
                         rf'\b{re.escape(term)}\b',  # safe regex
                         phoneme,
