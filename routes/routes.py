@@ -25,7 +25,7 @@ from models.models import ( User, Workspace, WorkspaceSettings, WorkspaceMember,
 from models.schemas import ( UserSignup, UserLogin, UpdateUser,DispatchRequest,CreateRoomRequestSchema,WebCallResponse,WebCallCreateRequest,GetPBXLLMOut,
                                 WorkspaceCreate, WorkspaceOut, InviteMember,WorkspaceSettingsUpdate, AgentCreate, AgentOut, PBXLLMCreate, PBXLLMOut, 
                                 CreateChatRequest, CreateChatResponse, VoiceOut, VoiceCreate, PhoneNumberCreate, PhoneNumberOut, APIResponse, PhoneNumberRequest, 
-                                Response, AgentUpdate
+                                Response, AgentUpdate, UpdateCallMetadata
                      )
 from utils.helpers import (
     format_response, validate_email,
@@ -2822,6 +2822,46 @@ def get_webcalls_by_user_id(
             "data": data
         }
     )
+
+@router.patch("/update-call/{call_id}")
+def update_call_metadata(
+    call_id: str,
+    payload: UpdateCallMetadata,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update call_metadata and optionally opt_out_sensitive_data_storage for a specific WebCall
+    """
+
+    # 🔍 Fetch WebCall
+    web_call = db.query(WebCall).filter(WebCall.call_id == call_id).first()
+    if not web_call:
+        raise HTTPException(status_code=404, detail="WebCall not found")
+    LIVEKIT_URL = os.getenv("LIVEKIT_URL")
+    # ✅ Merge payload.metadata with livekit_url
+    updated_metadata = payload.metadata or {}
+    updated_metadata["livekit_url"] = LIVEKIT_URL
+
+    # 💾 Save merged metadata
+    web_call.call_metadata = updated_metadata
+
+    # ✅ Optionally update opt_out_sensitive_data_storage
+    if payload.opt_out_sensitive_data_storage is not None:
+        web_call.opt_out_sensitive_data_storage = payload.opt_out_sensitive_data_storage
+
+    # 💾 Commit changes
+    db.commit()
+    db.refresh(web_call)  # Refresh object to get updated state
+
+    # 📦 Serialize full WebCall response
+    response_data = WebCallResponse.from_orm(web_call).dict()
+
+    return {
+        "status": True,
+        "message": "WebCall metadata updated successfully",
+        "data": response_data
+    }
 
 @router.delete("/delete-call/{call_id}")
 def delete_web_call(

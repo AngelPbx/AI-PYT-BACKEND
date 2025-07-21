@@ -513,9 +513,7 @@ class WebCallResponse(BaseModel):
     end_timestamp: Optional[int] = None
     duration_ms: Optional[int] = None
     transcript: Optional[str] = None
-
     transcript_object: Optional[Dict[str, Any]] = {}
-
     transcript_with_tool_calls: Optional[List[Dict[str, Any]]] = []
     recording_url: Optional[str] = None
     public_log_url: Optional[str] = None
@@ -528,6 +526,10 @@ class WebCallResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class UpdateCallMetadata(BaseModel):
+    metadata: Dict[str, Any]
+    opt_out_sensitive_data_storage: Optional[bool] = None
         
 # Pydantic models for request and response
 class PhoneNumberRequest(BaseModel):
