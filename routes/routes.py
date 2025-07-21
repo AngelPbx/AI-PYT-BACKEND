@@ -2832,7 +2832,7 @@ def delete_web_call(
     query = db.get(WebCall, call_id)
     if not query:
         return JSONResponse(
-            status=404,
+            status_code=404,
             content={
                 "status":False,
                 "message":"WebCall not found",
