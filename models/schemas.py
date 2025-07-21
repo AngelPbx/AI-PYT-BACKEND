@@ -260,7 +260,7 @@ class GetPBXLLMOut(BaseModel):
     starting_state: Optional[str]
     begin_message: Optional[str]
     default_dynamic_variables: Optional[Dict[str, Any]]
-    knowledge_base_ids: Optional[List[int]]
+    knowledge_base_ids: Optional[List[str]]
     is_published: bool
     last_modification_timestamp: int
 

@@ -47,7 +47,15 @@ def get_agent_and_llm(agent_id: str):
         if not llm:
             raise ValueError(f"No PBXLLM found with ID: {llm_id}")
 
-        return agent, llm
+        # Prepare pronunciation dictionary
+        pronunciations = {}
+        for item in agent.pronunciation_dictionary or []:
+            word = item.get("word")
+            phoneme = item.get("phoneme")
+            if word and phoneme:
+                pronunciations[word] = phoneme
+
+        return agent, llm, pronunciations
     finally:
         db.close()
 
@@ -62,7 +70,11 @@ def build_stt(s2s_model: str = None, language: str = "en"):
     if "whisper" in s2s_model:
         return openai.STT(language=language)
     elif "deepgram" in s2s_model:
-        return deepgram.STT(model=s2s_model)
+        return deepgram.STT(
+        model="general",  # ✅ fallback to general model
+        language="en-US"
+    )
+        # return deepgram.STT(model=s2s_model)
     else:
         # Default to Whisper as fallback
         return openai.STT(language=language)
@@ -110,36 +122,7 @@ def cosine_similarity(a, b):
         return 0
     return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
 
-# def retrieve_kb_context(query: str, kb_id: str, top_k: int = 3) -> str:
-#     query_embedding = get_embedding(query)
-#     session = SessionLocal()
-#     results = []
-#     try:
-#         kb_files = session.query(KnowledgeFile).filter(KnowledgeFile.kb_id == kb_id).all()
-#         for file in kb_files:
-#             if not file.extract_data:
-#                 continue
-#             emb = file.embedding
-#             if isinstance(emb, str):
-#                 emb = np.array(eval(emb))                
-#             score = cosine_similarity(query_embedding, emb)
-#             results.append({
-#                 "score": score,
-#                 "content": file.extract_data.strip(),
-#                 "file_path": file.file_path,
-#             })
-#             # results.append((score, file.extract_data.strip()))
-#     finally:
-#         session.close()
-#     # Take top_k matches only
-#     top_chunks = sorted(results, key=lambda x: x["score"], reverse=True)[:top_k]
 
-#     # Create combined context
-#     combined_context = "\n\n".join(chunk["content"] for chunk in top_chunks)
-
-#     return combined_context, top_chunks
-    # top_chunks = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
-    # return "\n\n".join(chunk for _, chunk in top_chunks)
 def retrieve_kb_context(query: str, kb_ids: List[str], top_k: int = 3) -> str:
     query_embedding = get_embedding(query)
     session = SessionLocal()
@@ -151,7 +134,7 @@ def retrieve_kb_context(query: str, kb_ids: List[str], top_k: int = 3) -> str:
             .all()
         )
 
-        # kb_files = session.query(KnowledgeFile).filter(KnowledgeFile.kb_id == kb_id).all()
+      
         for file in kb_files:
             if not file.extract_data:
                 continue
@@ -164,7 +147,7 @@ def retrieve_kb_context(query: str, kb_ids: List[str], top_k: int = 3) -> str:
                 "content": file.extract_data.strip(),
                 "file_path": file.file_path,
             })
-            # results.append((score, file.extract_data.strip()))
+           
     finally:
         session.close()
 
@@ -174,9 +157,7 @@ def retrieve_kb_context(query: str, kb_ids: List[str], top_k: int = 3) -> str:
     combined_context = "\n\n".join(chunk["content"] for chunk in top_chunks)
 
     return combined_context, top_chunks
-    # top_chunks = sorted(results, key=lambda x: x[0], reverse=True)[:top_k]
-    # return "\n\n".join(chunk for _, chunk in top_chunks)
-
+   
 async def hangup_call():
     ctx = get_job_context()
     if ctx is None:
@@ -197,6 +178,7 @@ class UserData:
     ctx: Optional[JobContext] = None
     start_timestamp: Optional[int] = None
     retrieved_file_paths: List[dict] = None
+    pronunciations: dict = field(default_factory=dict)
     llm_token_usage: dict = field(default_factory=lambda: {
         "values": [],
         "average": 0,
@@ -208,7 +190,8 @@ class UserData:
 # --- Agent ---
 class Assistant(Agent):
     def __init__(self):
-        super().__init__(instructions="Answer only based on the provided KB data. Be concise and helpful.")
+        super().__init__(instructions="Answer only based on the provided KB data. Be concise and helpful.",
+                         tools=[])
         self.volume: int = 50
         self.transcript_log: list[str] = []
 
@@ -248,16 +231,24 @@ class Assistant(Agent):
     text: AsyncIterable[str], 
     model_settings: ModelSettings
 ) -> AsyncIterable[rtc.AudioFrame]:
-        pronunciations = {
-            "API": "A P I", "book": "Books", "REST": "rest", "SQL": "sequel",
-            "kubectl": "kube control", "AWS": "A W S", "UI": "U I", "URL": "U R L",
-            "npm": "N P M", "LiveKit": "Live Kit", "async": "a sink", "nginx": "engine x",
-        }
+        userdata: UserData = self.session.userdata
+        # pronunciations = {
+        #     "API": "A P I", "book": "Books", "REST": "rest", "SQL": "sequel",
+        #     "kubectl": "kube control", "AWS": "A W S", "UI": "U I", "URL": "U R L",
+        #     "npm": "N P M", "LiveKit": "Live Kit", "async": "a sink", "nginx": "engine x",
+        # }
 
         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
             async for chunk in input_text:
-                for term, pronunciation in pronunciations.items():
-                    chunk = re.sub(rf'\b{term}\b', pronunciation, chunk, flags=re.IGNORECASE)
+                for term, phoneme in userdata.pronunciations.items():
+                    chunk = re.sub(
+                        rf'\b{re.escape(term)}\b',  # safe regex
+                        phoneme,
+                        chunk,
+                        flags=re.IGNORECASE
+                    )
+                # for term, pronunciation in pronunciations.items():
+                #     chunk = re.sub(rf'\b{term}\b', pronunciation, chunk, flags=re.IGNORECASE)
                 yield chunk
 
         # 👇 Chain both: apply pronunciation, then volume control
@@ -332,7 +323,7 @@ async def entrypoint(ctx: JobContext):
     metadata = json.loads(ctx.job.metadata)
     agent_id = metadata.get("agent_id")
    
-    agent, llm = get_agent_and_llm(agent_id)
+    agent, llm, pronunciations  = get_agent_and_llm(agent_id)
 
     stt = build_stt(llm.s2s_model, language=agent.language or "en")
     tts = build_tts(agent)
@@ -342,7 +333,7 @@ async def entrypoint(ctx: JobContext):
     kb_ids = llm.knowledge_base_ids or []
     # kb_id = kb_ids[0] if kb_ids else None
 
-    userdata = UserData(kb_ids=kb_ids, persona=persona,begin_message=begin_message ,ctx=ctx)
+    userdata = UserData(kb_ids=kb_ids, persona=persona,begin_message=begin_message ,pronunciations =pronunciations ,ctx=ctx)
 
 
     session = AgentSession(
