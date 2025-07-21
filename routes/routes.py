@@ -2829,7 +2829,7 @@ def delete_web_call(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
     ):
-    query = db.get(WebCall, call_id)
+    query = db.query(WebCall).filter(WebCall.call_id == call_id).first()
     if not query:
         return JSONResponse(
             status_code=404,
