@@ -2611,7 +2611,7 @@ async def create_web_call(
         end_timestamp=None,
         duration_ms=None,
         transcript=None,
-        transcript_object={},
+        transcript_object=[],
         transcript_with_tool_calls=[],
         recording_url=None,
         public_log_url=None,
