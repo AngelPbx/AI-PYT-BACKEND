@@ -16,6 +16,7 @@ from models.models import KnowledgeFile, PBXLLM, pbx_ai_agent, WebCall
 from db.database import engine
 from livekit.agents import ConversationItemAddedEvent
 from livekit.agents.llm import AudioContent
+from livekit.agents.voice.events import CloseEvent, ErrorEvent
 # agent knowledgebase done
 # voice control done
 # custom function call for sample done
@@ -90,7 +91,11 @@ def build_tts(agent):
     elif agent.voice_model == "elevenlabs":
         return elevenlabs.TTS(
             voice_id=agent.voice_id,
-            api_key=os.getenv("ELEVENLABS_API_KEY")
+            api_key=os.getenv("ELEVENLABS_API_KEY"),
+            language_code= "en-US",
+            # voice_settings= {
+            # "speed": 1
+            # }
         )
     else:
         return elevenlabs.TTS(
@@ -345,7 +350,21 @@ async def entrypoint(ctx: JobContext):
     )
     
     agent = Assistant()
-    
+
+    # Add error and close handlers
+    @session.on("error")
+    def on_error(ev: ErrorEvent):
+        if ev.error.recoverable:
+            return
+        logger.warning(f"⚠️ Error from {ev.source}: {ev.error}")
+
+        # Make agent say fallback message
+        session.say(
+            f"I'm having trouble right now. Please try again. {ev.source}: {ev.error}",
+            allow_interruptions=False,
+        )
+
+
 
     @session.on("user_input_transcribed")
     def on_transcribed(event: UserInputTranscribedEvent):
@@ -441,7 +460,25 @@ async def entrypoint(ctx: JobContext):
 
             # Save transcript data
             transcript_data = session.history.to_dict()
-            web_call.transcript_object = transcript_data
+            # Get raw transcript data
+            raw_transcript = session.history.to_dict()
+
+            # Transform transcript_object to desired format
+            formatted_transcript = []
+            for item in raw_transcript.get("items", []):
+                if item.get("type") == "message" and "content" in item and item["content"]:
+                    role = item.get("role", "")
+                    role = "agent" if role == "assistant" else role  # replace assistant -> agent
+                    content = item["content"][0] if isinstance(item["content"], list) else item["content"]
+                    formatted_transcript.append({
+                        "role": role,
+                        "content": content
+                    })
+
+            # Save formatted transcript
+            web_call.transcript_object = formatted_transcript
+
+            # web_call.transcript_object = transcript_data
             web_call.transcript = "\n".join([
                 f"{'Agent' if msg['role'] == 'assistant' else 'User'}: {msg['content'][0]}"
                 for msg in transcript_data.get('items', [])
