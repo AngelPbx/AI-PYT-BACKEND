@@ -403,19 +403,13 @@ async def entrypoint(ctx: JobContext):
             )
         )
             # 👇 Track token usage
-            try:
-                usage = response.usage  # OpenAI API includes this
-                total_tokens = usage.total_tokens
-            except AttributeError:
-                # fallback if not provided
-                total_tokens = 0
+            total_tokens = response.usage.total_tokens
 
-            # Track token usage only for analyze_chat
+            # ✅ Track usage properly
             llm_tokens = userdata.llm_token_usage
             llm_tokens["values"].append(total_tokens)
-            llm_tokens["num_requests"] += 1
-
-            # Recalculate average
+            logging.info(f"LLM Tokens used:✅✅👇✅ {total_tokens}")
+            llm_tokens["num_requests"] = len(llm_tokens["values"])
             llm_tokens["average"] = sum(llm_tokens["values"]) / llm_tokens["num_requests"]
 
 
