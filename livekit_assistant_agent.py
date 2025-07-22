@@ -92,7 +92,7 @@ def build_tts(agent):
         return elevenlabs.TTS(
             voice_id=agent.voice_id,
             api_key=os.getenv("ELEVENLABS_API_KEY"),
-            language_code= "en-US",
+            language= "en-US",
             # voice_settings= {
             # "speed": 1
             # }
