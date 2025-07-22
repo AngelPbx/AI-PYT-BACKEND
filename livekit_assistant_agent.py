@@ -92,10 +92,7 @@ def build_tts(agent):
         return elevenlabs.TTS(
             voice_id=agent.voice_id,
             api_key=os.getenv("ELEVENLABS_API_KEY"),
-            language= "en-US",
-            # voice_settings= {
-            # "speed": 1
-            # }
+           
         )
     else:
         return elevenlabs.TTS(
@@ -352,17 +349,17 @@ async def entrypoint(ctx: JobContext):
     agent = Assistant()
 
     # Add error and close handlers
-    @session.on("error")
-    def on_error(ev: ErrorEvent):
-        if ev.error.recoverable:
-            return
-        logger.warning(f"⚠️ Error from {ev.source}: {ev.error}")
+    # @session.on("error")
+    # def on_error(ev: ErrorEvent):
+    #     if ev.error.recoverable:
+    #         return
+    #     logger.warning(f"⚠️ Error from {ev.source}: {ev.error}")
 
-        # Make agent say fallback message
-        session.say(
-            f"I'm having trouble right now. Please try again. {ev.source}: {ev.error}",
-            allow_interruptions=False,
-        )
+    #     # Make agent say fallback message
+    #     session.say(
+    #         f"I'm having trouble right now. Please try again. {ev.source}: {ev.error}",
+    #         allow_interruptions=False,
+    #     )
 
 
 
