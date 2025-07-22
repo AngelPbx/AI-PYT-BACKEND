@@ -521,22 +521,18 @@ async def entrypoint(ctx: JobContext):
 
     ctx.add_shutdown_callback(write_transcript)
 # //////////////////////////////
+    usage_collector = metrics.UsageCollector()
+
     @session.on("metrics_collected")
     def _on_metrics_collected(ev: MetricsCollectedEvent):
-        metrics.log_metrics(ev.metrics)
-        logging.info(f"Metrics collected: 📞📞📞{ev.metrics}")
-    # usage_collector = metrics.UsageCollector()
+        usage_collector.collect(ev.metrics)
 
-    # @session.on("metrics_collected")
-    # def _on_metrics_collected(ev: MetricsCollectedEvent):
-    #     usage_collector.collect(ev.metrics)
+    async def log_usage():
+        summary = usage_collector.get_summary()
+        logger.info(f"Usage: 📞📞📞{summary}")
 
-    # async def log_usage():
-    #     summary = usage_collector.get_summary()
-    #     logger.info(f"Usage: 📞📞📞{summary}")
-
-    # # At shutdown, generate and log the summary from the usage collector
-    # ctx.add_shutdown_callback(log_usage)
+    # At shutdown, generate and log the summary from the usage collector
+    ctx.add_shutdown_callback(log_usage)
 # ////////////////////////////////////
     await ctx.connect()
     await session.start(agent=agent,room=ctx.room,
