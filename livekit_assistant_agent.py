@@ -460,23 +460,16 @@ async def entrypoint(ctx: JobContext):
 
             # Save transcript data
             transcript_data = session.history.to_dict()
-            # Get raw transcript data
-            raw_transcript = session.history.to_dict()
+            raw_items = session.history.to_dict().get("items", [])
+            cleaned_transcript = [
+                    {
+                        "role": "agent" if item["role"] == "assistant" else item["role"],
+                        "content": " ".join(item["content"])
+                    }
+                    for item in raw_items if item.get("type") == "message"
+                ]
 
-            # Transform transcript_object to desired format
-            formatted_transcript = []
-            for item in raw_transcript.get("items", []):
-                if item.get("type") == "message" and "content" in item and item["content"]:
-                    role = item.get("role", "")
-                    role = "agent" if role == "assistant" else role  # replace assistant -> agent
-                    content = item["content"][0] if isinstance(item["content"], list) else item["content"]
-                    formatted_transcript.append({
-                        "role": role,
-                        "content": content
-                    })
-
-            # Save formatted transcript
-            web_call.transcript_object = formatted_transcript
+            web_call.transcript_object = cleaned_transcript
 
             # web_call.transcript_object = transcript_data
             web_call.transcript = "\n".join([
