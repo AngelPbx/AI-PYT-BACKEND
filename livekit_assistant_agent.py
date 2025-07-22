@@ -410,8 +410,17 @@ async def entrypoint(ctx: JobContext):
                 # fallback if not provided
                 total_tokens = 0
 
-            userdata.llm_token_usage["values"].append(total_tokens)
-            userdata.llm_token_usage["num_requests"] += 1
+            # Track token usage only for analyze_chat
+            llm_tokens = userdata.llm_token_usage
+            llm_tokens["values"].append(total_tokens)
+            llm_tokens["num_requests"] += 1
+
+            # Recalculate average
+            llm_tokens["average"] = sum(llm_tokens["values"]) / llm_tokens["num_requests"]
+
+
+            # userdata.llm_token_usage["values"].append(total_tokens)
+            # userdata.llm_token_usage["num_requests"] += 1
 
 
             content = response.choices[0].message.content.strip()
