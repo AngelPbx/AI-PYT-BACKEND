@@ -537,7 +537,6 @@ async def entrypoint(ctx: JobContext):
 
     # # At shutdown, generate and log the summary from the usage collector
     # ctx.add_shutdown_callback(log_usage)
-    total_latency = eou.end_of_utterance_delay + llm.ttft + tts.ttfb
 # ////////////////////////////////////
     await ctx.connect()
     await session.start(agent=agent,room=ctx.room,
