@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
 from openai import OpenAI
 from livekit import rtc, api
+from livekit.agents import metrics, MetricsCollectedEvent
 from livekit.agents import (
     JobContext, WorkerOptions, cli, function_tool, get_job_context,
     BackgroundAudioPlayer, AudioConfig, BuiltinAudioClip,
@@ -519,6 +520,20 @@ async def entrypoint(ctx: JobContext):
             db.close()
 
     ctx.add_shutdown_callback(write_transcript)
+# //////////////////////////////
+    usage_collector = metrics.UsageCollector()
+
+    @session.on("metrics_collected")
+    def _on_metrics_collected(ev: MetricsCollectedEvent):
+        usage_collector.collect(ev.metrics)
+
+    async def log_usage():
+        summary = usage_collector.get_summary()
+        logger.info(f"Usage: 📞📞📞{summary}")
+
+    # At shutdown, generate and log the summary from the usage collector
+    ctx.add_shutdown_callback(log_usage)
+# ////////////////////////////////////
     await ctx.connect()
     await session.start(agent=agent,room=ctx.room,
                          room_input_options=RoomInputOptions(
