@@ -522,10 +522,20 @@ async def entrypoint(ctx: JobContext):
     ctx.add_shutdown_callback(write_transcript)
 # //////////////////////////////
     usage_collector = metrics.UsageCollector()
-
+    userdata: UserData = session.userdata
+    llm_token_usage = userdata.llm_token_usage
     @session.on("metrics_collected")
     def _on_metrics_collected(ev: MetricsCollectedEvent):
-        usage_collector.collect(ev.metrics)
+        if ev.metrics.llm is not None:
+            total_tokens = ev.metrics.llm.total_tokens
+            logging.info(f"LLM Tokens used in this call: {total_tokens}")
+            llm_token_usage["values"].append(total_tokens)
+            llm_token_usage["num_requests"] = len(llm_token_usage["values"])
+            llm_token_usage["average"] = (
+                sum(llm_token_usage["values"]) / llm_token_usage["num_requests"]
+            )
+
+            logger.info(f"📊 LLM token used in this call: {total_tokens}")
 
     async def log_usage():
         summary = usage_collector.get_summary()
