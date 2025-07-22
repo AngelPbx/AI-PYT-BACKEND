@@ -521,18 +521,23 @@ async def entrypoint(ctx: JobContext):
 
     ctx.add_shutdown_callback(write_transcript)
 # //////////////////////////////
-    usage_collector = metrics.UsageCollector()
-
     @session.on("metrics_collected")
     def _on_metrics_collected(ev: MetricsCollectedEvent):
-        usage_collector.collect(ev.metrics)
+        metrics.log_metrics(ev.metrics)
+        logging.info(f"Metrics collected: 📞📞📞{ev.metrics}")
+    # usage_collector = metrics.UsageCollector()
 
-    async def log_usage():
-        summary = usage_collector.get_summary()
-        logger.info(f"Usage: 📞📞📞{summary}")
+    # @session.on("metrics_collected")
+    # def _on_metrics_collected(ev: MetricsCollectedEvent):
+    #     usage_collector.collect(ev.metrics)
 
-    # At shutdown, generate and log the summary from the usage collector
-    ctx.add_shutdown_callback(log_usage)
+    # async def log_usage():
+    #     summary = usage_collector.get_summary()
+    #     logger.info(f"Usage: 📞📞📞{summary}")
+
+    # # At shutdown, generate and log the summary from the usage collector
+    # ctx.add_shutdown_callback(log_usage)
+    total_latency = eou.end_of_utterance_delay + llm.ttft + tts.ttfb
 # ////////////////////////////////////
     await ctx.connect()
     await session.start(agent=agent,room=ctx.room,
