@@ -235,23 +235,18 @@ class Assistant(Agent):
     model_settings: ModelSettings
 ) -> AsyncIterable[rtc.AudioFrame]:
         userdata: UserData = self.session.userdata
-        # pronunciations = {
-        #     "API": "A P I", "book": "Books", "REST": "rest", "SQL": "sequel",
-        #     "kubectl": "kube control", "AWS": "A W S", "UI": "U I", "URL": "U R L",
-        #     "npm": "N P M", "LiveKit": "Live Kit", "async": "a sink", "nginx": "engine x",
-        # }
+        pronunciations_test = {
+            "API": "A P I", "book": "Boooooks", "SQL": "sequel",
+        }
 
         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
             async for chunk in input_text:
                 for term, phoneme in userdata.pronunciations.items():
-                    chunk = re.sub(
-                        rf'\b{re.escape(term)}\b',  # safe regex
-                        phoneme,
-                        chunk,
-                        flags=re.IGNORECASE
-                    )
-                # for term, pronunciation in pronunciations.items():
-                #     chunk = re.sub(rf'\b{term}\b', pronunciation, chunk, flags=re.IGNORECASE)
+                    # chunk = re.sub(rf'\b{re.escape(term)}\b',phoneme,chunk,flags=re.IGNORECASE)
+                    chunk = re.sub(rf'\b{term}\b',phoneme,chunk,flags=re.IGNORECASE)
+                    logging.info(f'⚠️--⚠️--⚠️{term}', phoneme)
+                for term, pronunciation in pronunciations_test.items():
+                    logging.info(f'⚠️⚠️⚠️{term}', pronunciation)
                 yield chunk
 
         # 👇 Chain both: apply pronunciation, then volume control
