@@ -244,7 +244,7 @@ class Assistant(Agent):
                 for term, phoneme in userdata.pronunciations.items():
                     # chunk = re.sub(rf'\b{re.escape(term)}\b',phoneme,chunk,flags=re.IGNORECASE)
                     chunk = re.sub(rf'\b{term}\b',phoneme,chunk,flags=re.IGNORECASE)
-                    logging.info(f'⚠️--⚠️--⚠️{term}', phoneme)
+                    # logging.info(f'⚠️--⚠️--⚠️{term}', phoneme)
                 # for term, pronunciation in pronunciations_test.items():
                 #     logging.info(f'⚠️⚠️⚠️{term}', pronunciation)
                 yield chunk
