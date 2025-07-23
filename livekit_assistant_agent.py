@@ -244,10 +244,11 @@ class Assistant(Agent):
             async for chunk in input_text:
                 for term, phoneme in userdata.pronunciations.items():
                     # chunk = re.sub(rf'\b{re.escape(term)}\b',phoneme,chunk,flags=re.IGNORECASE)
-                    chunk = re.sub(rf'\b{term}\b',phoneme,chunk,flags=re.IGNORECASE)
-                    # logging.info(f'⚠️--⚠️--⚠️{term}', phoneme)
-                # for term, pronunciation in pronunciations_test.items():
-                #     logging.info(f'⚠️⚠️⚠️{term}', pronunciation)
+                    # chunk = re.sub(rf'\b{term}\b',phoneme,chunk,flags=re.IGNORECASE)
+                   # Escape regex special characters in term
+                    safe_term = re.escape(term)
+                    # Replace all occurrences, ignoring case
+                    chunk = re.sub(safe_term, phoneme, chunk, flags=re.IGNORECASE)
                 yield chunk
 
         # 👇 Chain both: apply pronunciation, then volume control
