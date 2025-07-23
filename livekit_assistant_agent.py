@@ -241,15 +241,19 @@ class Assistant(Agent):
 
         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
             async for chunk in input_text:
-                for term, phoneme in pronunciations_test.items():
-                    # chunk = re.sub(rf'\b{re.escape(term)}\b',phoneme,chunk,flags=re.IGNORECASE)
-                    # chunk = re.sub(rf'\b{term}\b',phoneme,chunk,flags=re.IGNORECASE)
-                   # Escape regex special characters in term
-                    safe_term = re.escape(term)
-                    # Replace all occurrences, ignoring case 
-                    chunk = re.sub(safe_term, phoneme, chunk, flags=re.IGNORECASE)
-                yield chunk
-                logging.info(f"⚠️⚠️ Pronunciations adjusted chunk: {chunk}")
+                modified_chunk = chunk
+                
+                # Apply pronunciation rules
+                for term, pronunciation in pronunciations_test.items():
+                    # Use word boundaries to avoid partial replacements
+                    modified_chunk = re.sub(
+                        rf'\b{term}\b',
+                        pronunciation,
+                        modified_chunk,
+                        flags=re.IGNORECASE
+                    )
+                
+                yield modified_chunk
 
         # 👇 Chain both: apply pronunciation, then volume control
         return self._adjust_volume_in_stream(
