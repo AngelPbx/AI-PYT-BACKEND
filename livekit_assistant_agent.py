@@ -557,6 +557,7 @@ async def entrypoint(ctx: JobContext):
 
     # Get ambient sound from agent API metadata
     ambient_sound_key = agentdb.ambient_sound or "none"  # fallback to "none"
+    ambient_sound_volume_key = agentdb.ambient_sound_volume or "0.8"  # default volume
 
     # Resolve to actual audio config
     ambient_sound_value = AMBIENT_SOUND_MAP.get(ambient_sound_key, None)
@@ -567,7 +568,7 @@ async def entrypoint(ctx: JobContext):
 
     # ✅ Setup BackgroundAudioPlayer
     background_audio = BackgroundAudioPlayer(
-        ambient_sound=AudioConfig(ambient_sound_value, volume=0.8) if ambient_sound_value else None,
+        ambient_sound=AudioConfig(ambient_sound_value, volume=ambient_sound_volume_key) if ambient_sound_value else None,
         thinking_sound=[
             AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.8),
             AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.7),
