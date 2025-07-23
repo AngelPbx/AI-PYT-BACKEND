@@ -241,7 +241,7 @@ class Assistant(Agent):
 
         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
             async for chunk in input_text:
-                for term, phoneme in userdata.pronunciations.items():
+                for term, phoneme in pronunciations_test.items():
                     logging.info(f'⚠️⚠️⚠️{term}', phoneme)
                     # chunk = re.sub(rf'\b{re.escape(term)}\b',phoneme,chunk,flags=re.IGNORECASE)
                     chunk = re.sub(rf'\b{term}\b',phoneme,chunk,flags=re.IGNORECASE)
