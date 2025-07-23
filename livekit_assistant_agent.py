@@ -93,32 +93,12 @@ def build_tts(agent):
         return elevenlabs.TTS(
             voice_id=agent.voice_id,
             api_key=os.getenv("ELEVENLABS_API_KEY"),
-            model="eleven_multilingual_v2",
-            stability=0.7,
-            similarity_boost=0.8,
-            style=0.3,
-            use_speaker_boost=True,
-            speed=1.1,
-            language="en",
-            enable_ssml_parsing=True,  # For pronunciation and normalization
-            streaming_latency=2,
-            chunk_length_schedule=[80, 120, 200, 260]
            
         )
     else:
         return elevenlabs.TTS(
             voice_id="21m00Tcm4TlvDq8ikWAM",
-            api_key=os.getenv("ELEVENLABS_API_KEY"),
-            model="eleven_multilingual_v2",
-            stability=0.7,
-            similarity_boost=0.8,
-            style=0.3,
-            use_speaker_boost=True,
-            speed=1.1,
-            language="en",
-            enable_ssml_parsing=True,  # For pronunciation and normalization
-            streaming_latency=2,
-            chunk_length_schedule=[80, 120, 200, 260]
+            api_key=os.getenv("ELEVENLABS_API_KEY")
         )
         
 
