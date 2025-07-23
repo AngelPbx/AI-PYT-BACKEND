@@ -266,7 +266,7 @@ class Assistant(Agent):
         userdata: UserData = self.session.userdata
 
         # Use pronunciations from userdata or fallback to demo
-        pronunciations = userdata.pronunciations or {
+        pronunciations = {
             "API": "A P I",
             "book": "Boooooks",
             "Ankit": "aaaaankeeeet",
