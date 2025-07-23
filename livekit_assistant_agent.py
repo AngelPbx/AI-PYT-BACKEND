@@ -544,13 +544,13 @@ async def entrypoint(ctx: JobContext):
     # 🌟 Map API values to file names or built-in clips
     AMBIENT_SOUND_MAP = {
         "forest-birds": "forestbirds.wav",
-        "coffee-shop": "coffee_shop.wav",
-        "convention-hall": "convention_hall.wav",
-        "summer-outdoor": "summer_outdoor.wav",
+        "coffee-shop": "coffee-shop.wav",
+        "convention-hall": "convention-hall.wav",
+        "summer-outdoor": "summer-outdoor.wav",
         "office": BuiltinAudioClip.OFFICE_AMBIENCE,
-        "mountain-outdoor": "mountain_outdoor.wav",
-        "static_-noise": "static_noise.wav",
-        "call-center": "call_center.wav",
+        "mountain-outdoor": "mountain-outdoor.wav",
+        "static_-noise": "static-noise.wav",
+        "call-center": "call-center.wav",
         "none": None  # no ambient sound
     }
 
