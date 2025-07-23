@@ -236,6 +236,7 @@ class Assistant(Agent):
 ) -> AsyncIterable[rtc.AudioFrame]:
         userdata: UserData = self.session.userdata
         pronunciations_test = {'API': 'A P I', 'book': 'Boooooks','Ankit': 'aaaaankeeeet' ,'SQL': 'sequel'}
+        logging.info(f"⚠️⚠️ Pronunciations demo:{pronunciations_test.items()}--------->>>>")
         logging.info(f"⚠️⚠️⚠️ Pronunciations:{type(userdata.pronunciations)} {userdata.pronunciations.items()}---------")
 
         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
