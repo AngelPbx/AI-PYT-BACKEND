@@ -236,7 +236,7 @@ class Assistant(Agent):
 ) -> AsyncIterable[rtc.AudioFrame]:
         userdata: UserData = self.session.userdata
         pronunciations_test = {'API': 'A P I', 'book': 'Boooooks','Ankit': 'aaaaankeeeet' ,'SQL': 'sequel'}
-        logging.info(f"⚠️⚠️⚠️ Pronunciations:{type(userdata.pronunciations)} {userdata.pronunciations}---------")
+        logging.info(f"⚠️⚠️⚠️ Pronunciations:{type(userdata.pronunciations)} {userdata.pronunciations.items()}---------")
 
         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
             async for chunk in input_text:
@@ -245,7 +245,7 @@ class Assistant(Agent):
                     # chunk = re.sub(rf'\b{term}\b',phoneme,chunk,flags=re.IGNORECASE)
                    # Escape regex special characters in term
                     safe_term = re.escape(term)
-                    # Replace all occurrences, ignoring case
+                    # Replace all occurrences, ignoring case 
                     chunk = re.sub(safe_term, phoneme, chunk, flags=re.IGNORECASE)
                 yield chunk
 
