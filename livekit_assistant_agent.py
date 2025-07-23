@@ -236,8 +236,8 @@ class Assistant(Agent):
 ) -> AsyncIterable[rtc.AudioFrame]:
         userdata: UserData = self.session.userdata
         pronunciations_test = {'API': 'A P I', 'book': 'Boooooks','Ankit': 'aaaaankeeeet' ,'SQL': 'sequel'}
-        logging.info(f"⚠️⚠️ Pronunciations demo:{pronunciations_test.items()}--------->>>>")
-        logging.info(f"⚠️⚠️⚠️ Pronunciations:{type(userdata.pronunciations)} {userdata.pronunciations.items()}---------")
+        # logging.info(f"⚠️⚠️ Pronunciations demo:{pronunciations_test.items()}--------->>>>")
+        # logging.info(f"⚠️⚠️⚠️ Pronunciations:{type(userdata.pronunciations)} {userdata.pronunciations.items()}---------")
 
         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
             async for chunk in input_text:
@@ -249,6 +249,7 @@ class Assistant(Agent):
                     # Replace all occurrences, ignoring case 
                     chunk = re.sub(safe_term, phoneme, chunk, flags=re.IGNORECASE)
                 yield chunk
+                logging.info(f"⚠️⚠️ Pronunciations adjusted chunk: {chunk}")
 
         # 👇 Chain both: apply pronunciation, then volume control
         return self._adjust_volume_in_stream(
