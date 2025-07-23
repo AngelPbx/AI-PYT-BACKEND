@@ -328,7 +328,7 @@ async def entrypoint(ctx: JobContext):
    
     agentdb, llm, pronunciations  = get_agent_and_llm(agent_id)
 
-    stt = build_stt(llm.s2s_model, language=agent.language or "en")
+    stt = build_stt(llm.s2s_model, language=agentdb.language or "en")
     tts = build_tts(agentdb)
     llm_plugin = build_llm(llm)
     begin_message=llm.begin_message
