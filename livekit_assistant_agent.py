@@ -557,6 +557,7 @@ async def entrypoint(ctx: JobContext):
     background_audio = BackgroundAudioPlayer()
 
     await background_audio.start(agent_session=session, room=ctx.room)
+    await background_audio.play("forestbirds.wav")
     # participant = await ctx.wait_for_participant()
     # if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
     #     call_id = participant.attributes.get("sip.callID")
