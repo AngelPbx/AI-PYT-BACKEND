@@ -540,24 +540,21 @@ async def entrypoint(ctx: JobContext):
             noise_cancellation=noise_cancellation.BVC()
         ))
     # An audio player with automated ambient and thinking sounds
+    # ✅ Only one BackgroundAudioPlayer
     background_audio = BackgroundAudioPlayer(
-        ambient_sound=AudioConfig(BuiltinAudioClip.OFFICE_AMBIENCE, volume=0.8),
+        ambient_sound=AudioConfig("forestbirds.wav", volume=0.8),
         thinking_sound=[
             AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.8),
             AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.7),
         ],
     )
 
-    # An audio player with a custom ambient sound played on a loop
-    background_audio = BackgroundAudioPlayer(
-        ambient_sound="forestbirds.wav",
-    )
-
-    # An audio player for on-demand playback only
-    background_audio = BackgroundAudioPlayer()
-
+    # ✅ Start background audio linked to session
     await background_audio.start(agent_session=session, room=ctx.room)
-    await background_audio.play("forestbirds.wav")
+
+    # ✅ Play ambient sound (loops automatically)
+    await background_audio.play("forestbirds.wav", loop=True)
+
     # participant = await ctx.wait_for_participant()
     # if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
     #     call_id = participant.attributes.get("sip.callID")
