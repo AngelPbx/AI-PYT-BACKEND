@@ -268,7 +268,7 @@ class Assistant(Agent):
         # Use pronunciations from userdata or fallback to demo
         pronunciations = {
             "API": "A P I",
-            "book": "Boooooks",
+            "sorry": "shawty",
             "Ankit": "aaaaankeeeet",
             "SQL": "sequel"
         }
