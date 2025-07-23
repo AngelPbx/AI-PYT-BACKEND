@@ -550,19 +550,14 @@ async def entrypoint(ctx: JobContext):
         "call-center": "call-center.wav",
         "none": None  # no ambient sound
     }
-    # logger.info("🌟 Ambient sound map initialized.",agentdb.ambient_sound)
-
+  
     # Get ambient sound from agent API metadata
     ambient_sound_key = agentdb.ambient_sound or "none"  # fallback to "none"
     ambient_sound_volume_key = agentdb.ambient_sound_volume or "0.8"  # default volume
 
     # Resolve to actual audio config
     ambient_sound_value = AMBIENT_SOUND_MAP.get(ambient_sound_key, None)
-    if ambient_sound_value is None:
-        logger.info("☕ No ambient sound selected.")
-    else:
-        logger.info(f"🎵 Ambient sound selected: {ambient_sound_key}")
-
+  
     # ✅ Setup BackgroundAudioPlayer
     background_audio = BackgroundAudioPlayer(
         ambient_sound=AudioConfig(ambient_sound_value, volume=ambient_sound_volume_key) if ambient_sound_value else None,
@@ -578,25 +573,6 @@ async def entrypoint(ctx: JobContext):
         await background_audio.play(ambient_sound_value, loop=True)
 
 
-    # # ✅ Only one BackgroundAudioPlayer
-    # background_audio = BackgroundAudioPlayer(
-    #     ambient_sound=AudioConfig("forestbirds.wav", volume=0.8),
-    #     thinking_sound=[
-    #         AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.8),
-    #         AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.7),
-    #     ],
-    # )
-
-    # # ✅ Start background audio linked to session
-    # await background_audio.start(agent_session=session, room=ctx.room)
-
-    # # ✅ Play ambient sound (loops automatically)
-    # await background_audio.play("forestbirds.wav", loop=True)
-
-    
-    
-    
-    
 
 # --- CLI ---
 if __name__ == "__main__":
