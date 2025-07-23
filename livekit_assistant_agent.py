@@ -235,21 +235,30 @@ class Assistant(Agent):
     model_settings: ModelSettings
 ) -> AsyncIterable[rtc.AudioFrame]:
         userdata: UserData = self.session.userdata
-        pronunciations_test = {
-            "API": "A P I", "book": "Boooooks", "SQL": "sequel"
-        }
+        pronunciations_test = {"API": "A P I", "book": "Boooooks", "SQL": "sequel"}
         logging.info(f"⚠️⚠️⚠️ Pronunciations:{type(userdata.pronunciations)} {userdata.pronunciations}---------")
-
         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
             async for chunk in input_text:
+                logging.info(f"🔄 Original chunk: {chunk}")
                 for term, phoneme in userdata.pronunciations.items():
-                    # chunk = re.sub(rf'\b{re.escape(term)}\b',phoneme,chunk,flags=re.IGNORECASE)
-                    # chunk = re.sub(rf'\b{term}\b',phoneme,chunk,flags=re.IGNORECASE)
-                   # Escape regex special characters in term
-                    safe_term = re.escape(term)
-                    # Replace all occurrences, ignoring case
-                    chunk = re.sub(safe_term, phoneme, chunk, flags=re.IGNORECASE)
+                    safe_term = re.escape(term.strip())
+                    pattern = re.compile(safe_term, flags=re.IGNORECASE)
+                    new_chunk, count = pattern.subn(phoneme, chunk)
+                    if count > 0:
+                        logging.info(f"✅ Replaced '{term}' with '{phoneme}' ({count} times)")
+                    chunk = new_chunk
+                logging.info(f"🎯 Modified chunk: {chunk}")
                 yield chunk
+        # async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
+        #     async for chunk in input_text:
+        #         for term, phoneme in userdata.pronunciations.items():
+        #             # chunk = re.sub(rf'\b{re.escape(term)}\b',phoneme,chunk,flags=re.IGNORECASE)
+        #             # chunk = re.sub(rf'\b{term}\b',phoneme,chunk,flags=re.IGNORECASE)
+        #            # Escape regex special characters in term
+        #             safe_term = re.escape(term)
+        #             # Replace all occurrences, ignoring case
+        #             chunk = re.sub(safe_term, phoneme, chunk, flags=re.IGNORECASE)
+        #         yield chunk
 
         # 👇 Chain both: apply pronunciation, then volume control
         return self._adjust_volume_in_stream(
