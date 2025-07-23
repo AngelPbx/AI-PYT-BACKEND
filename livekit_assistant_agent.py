@@ -540,26 +540,59 @@ async def entrypoint(ctx: JobContext):
             noise_cancellation=noise_cancellation.BVC()
         ))
     # An audio player with automated ambient and thinking sounds
-    # ✅ Only one BackgroundAudioPlayer
+
+    # 🌟 Map API values to file names or built-in clips
+    AMBIENT_SOUND_MAP = {
+        "forest-birds": "forestbirds.wav",
+        "coffee-shop": "coffee_shop.wav",
+        "convention-hall": "convention_hall.wav",
+        "summer-outdoor": "summer_outdoor.wav",
+        "office": BuiltinAudioClip.OFFICE_AMBIENCE,
+        "mountain-outdoor": "mountain_outdoor.wav",
+        "static_-noise": "static_noise.wav",
+        "call-center": "call_center.wav",
+        "none": None  # no ambient sound
+    }
+
+    # Get ambient sound from agent API metadata
+    ambient_sound_key = agent.ambient_sound or "none"  # fallback to "none"
+
+    # Resolve to actual audio config
+    ambient_sound_value = AMBIENT_SOUND_MAP.get(ambient_sound_key, None)
+    if ambient_sound_value is None:
+        logger.info("☕ No ambient sound selected.")
+    else:
+        logger.info(f"🎵 Ambient sound selected: {ambient_sound_key}")
+
+    # ✅ Setup BackgroundAudioPlayer
     background_audio = BackgroundAudioPlayer(
-        ambient_sound=AudioConfig("forestbirds.wav", volume=0.8),
+        ambient_sound=AudioConfig(ambient_sound_value, volume=0.8) if ambient_sound_value else None,
         thinking_sound=[
             AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.8),
             AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.7),
         ],
     )
 
-    # ✅ Start background audio linked to session
+    # ✅ Start and play ambient sound
     await background_audio.start(agent_session=session, room=ctx.room)
+    if ambient_sound_value:
+        await background_audio.play(ambient_sound_value, loop=True)
 
-    # ✅ Play ambient sound (loops automatically)
-    await background_audio.play("forestbirds.wav", loop=True)
 
-    # participant = await ctx.wait_for_participant()
-    # if participant.kind == rtc.ParticipantKind.PARTICIPANT_KIND_SIP:
-    #     call_id = participant.attributes.get("sip.callID")
-    #     phone = participant.attributes.get("sip.phoneNumber", "unknown")
-    #     print(f"📞 SIP call from {phone}, Call ID: {call_id}")
+    # # ✅ Only one BackgroundAudioPlayer
+    # background_audio = BackgroundAudioPlayer(
+    #     ambient_sound=AudioConfig("forestbirds.wav", volume=0.8),
+    #     thinking_sound=[
+    #         AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.8),
+    #         AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING2, volume=0.7),
+    #     ],
+    # )
+
+    # # ✅ Start background audio linked to session
+    # await background_audio.start(agent_session=session, room=ctx.room)
+
+    # # ✅ Play ambient sound (loops automatically)
+    # await background_audio.play("forestbirds.wav", loop=True)
 
     
     
