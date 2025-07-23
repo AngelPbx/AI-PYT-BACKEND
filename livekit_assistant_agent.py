@@ -229,31 +229,73 @@ class Assistant(Agent):
         await self.update_chat_ctx(chat_ctx)
         await self.session.say(f"{userdata.begin_message}")
 
+#     async def tts_node(
+#     self, 
+#     text: AsyncIterable[str], 
+#     model_settings: ModelSettings
+# ) -> AsyncIterable[rtc.AudioFrame]:
+#         userdata: UserData = self.session.userdata
+#         pronunciations_test = {'API': 'A P I', 'book': 'Boooooks','Ankit': 'aaaaankeeeet' ,'SQL': 'sequel'}
+#         logging.info(f"⚠️⚠️ Pronunciations demo:{pronunciations_test.items()}--------->>>>")
+#         logging.info(f"⚠️⚠️⚠️ Pronunciations:{type(userdata.pronunciations)} {userdata.pronunciations.items()}---------")
+
+#         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
+#             async for chunk in input_text:
+#                 for term, phoneme in userdata.pronunciations.items():
+#                     # chunk = re.sub(rf'\b{re.escape(term)}\b',phoneme,chunk,flags=re.IGNORECASE)
+#                     # chunk = re.sub(rf'\b{term}\b',phoneme,chunk,flags=re.IGNORECASE)
+#                    # Escape regex special characters in term
+#                     safe_term = re.escape(term)
+#                     # Replace all occurrences, ignoring case 
+#                     chunk = re.sub(safe_term, phoneme, chunk, flags=re.IGNORECASE)
+#                 yield chunk
+
+#         # 👇 Chain both: apply pronunciation, then volume control
+#         return self._adjust_volume_in_stream(
+#             Agent.default.tts_node(self, adjust_pronunciation(text), model_settings)
+#     )
     async def tts_node(
-    self, 
-    text: AsyncIterable[str], 
+    self,
+    text: AsyncIterable[str],
     model_settings: ModelSettings
 ) -> AsyncIterable[rtc.AudioFrame]:
+        """
+        TTS node that adjusts pronunciations dynamically
+        before passing text to the TTS engine.
+        """
         userdata: UserData = self.session.userdata
-        pronunciations_test = {'API': 'A P I', 'book': 'Boooooks','Ankit': 'aaaaankeeeet' ,'SQL': 'sequel'}
-        logging.info(f"⚠️⚠️ Pronunciations demo:{pronunciations_test.items()}--------->>>>")
-        logging.info(f"⚠️⚠️⚠️ Pronunciations:{type(userdata.pronunciations)} {userdata.pronunciations.items()}---------")
 
-        async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
-            async for chunk in input_text:
-                for term, phoneme in userdata.pronunciations.items():
-                    # chunk = re.sub(rf'\b{re.escape(term)}\b',phoneme,chunk,flags=re.IGNORECASE)
-                    # chunk = re.sub(rf'\b{term}\b',phoneme,chunk,flags=re.IGNORECASE)
-                   # Escape regex special characters in term
+        # Use pronunciations from userdata or fallback to demo
+        pronunciations = userdata.pronunciations or {
+            "API": "A P I",
+            "book": "Boooooks",
+            "Ankit": "aaaaankeeeet",
+            "SQL": "sequel"
+        }
+
+        logging.info(f"📖 Loaded pronunciations: {pronunciations}")
+
+        async def apply_pronunciations(input_stream: AsyncIterable[str]) -> AsyncIterable[str]:
+            """
+            Adjusts the input text stream by replacing terms
+            with their custom pronunciations.
+            """
+            async for chunk in input_stream:
+                original_chunk = chunk  # For debugging
+                for term, phoneme in pronunciations.items():
+                    # Escape regex special characters in term
                     safe_term = re.escape(term)
-                    # Replace all occurrences, ignoring case 
-                    chunk = re.sub(safe_term, phoneme, chunk, flags=re.IGNORECASE)
+                    # Replace all occurrences with word boundaries, case-insensitive
+                    pattern = rf'\b{safe_term}\b'
+                    chunk = re.sub(pattern, phoneme, chunk, flags=re.IGNORECASE)
+                if original_chunk != chunk:
+                    logging.debug(f"🔄 Pronunciation adjusted: '{original_chunk}' → '{chunk}'")
                 yield chunk
 
-        # 👇 Chain both: apply pronunciation, then volume control
-        return self._adjust_volume_in_stream(
-            Agent.default.tts_node(self, adjust_pronunciation(text), model_settings)
-    )
+        # Chain pronunciation adjustment → TTS → volume control
+        tts_stream = Agent.default.tts_node(self, apply_pronunciations(text), model_settings)
+        return self._adjust_volume_in_stream(tts_stream)
+
     @function_tool()
     async def set_volume(self, volume: int):
         """Set the volume of the audio output.
