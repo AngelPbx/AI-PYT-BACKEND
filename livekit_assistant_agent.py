@@ -236,7 +236,7 @@ class Assistant(Agent):
 ) -> AsyncIterable[rtc.AudioFrame]:
         userdata: UserData = self.session.userdata
         pronunciations_test = {
-            "API": "A P I", "book": "Boooooks", "SQL": "sequel",
+            "API": "A P I", "book": "Boooooks", "SQL": "sequel"
         }
 
         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
@@ -245,8 +245,8 @@ class Assistant(Agent):
                     # chunk = re.sub(rf'\b{re.escape(term)}\b',phoneme,chunk,flags=re.IGNORECASE)
                     chunk = re.sub(rf'\b{term}\b',phoneme,chunk,flags=re.IGNORECASE)
                     logging.info(f'⚠️--⚠️--⚠️{term}', phoneme)
-                for term, pronunciation in pronunciations_test.items():
-                    logging.info(f'⚠️⚠️⚠️{term}', pronunciation)
+                # for term, pronunciation in pronunciations_test.items():
+                #     logging.info(f'⚠️⚠️⚠️{term}', pronunciation)
                 yield chunk
 
         # 👇 Chain both: apply pronunciation, then volume control
