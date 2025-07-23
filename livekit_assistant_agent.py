@@ -244,7 +244,7 @@ class Assistant(Agent):
                 modified_chunk = chunk
                 
                 # Apply pronunciation rules
-                for term, pronunciation in pronunciations_test.items():
+                for term, pronunciation in userdata.pronunciations.items():
                     # Use word boundaries to avoid partial replacements
                     modified_chunk = re.sub(
                         rf'\b{term}\b',
