@@ -548,7 +548,7 @@ async def entrypoint(ctx: JobContext):
         "call-center": "call-center.wav",
         "none": None  # no ambient sound
     }
-    logger.info("🌟 Ambient sound map initialized.",agentdb.ambient_sound)
+    # logger.info("🌟 Ambient sound map initialized.",agentdb.ambient_sound)
 
     # Get ambient sound from agent API metadata
     ambient_sound_key = agentdb.ambient_sound or "none"  # fallback to "none"
