@@ -326,10 +326,10 @@ async def entrypoint(ctx: JobContext):
     metadata = json.loads(ctx.job.metadata)
     agent_id = metadata.get("agent_id")
    
-    agent, llm, pronunciations  = get_agent_and_llm(agent_id)
+    agentdb, llm, pronunciations  = get_agent_and_llm(agent_id)
 
     stt = build_stt(llm.s2s_model, language=agent.language or "en")
-    tts = build_tts(agent)
+    tts = build_tts(agentdb)
     llm_plugin = build_llm(llm)
     begin_message=llm.begin_message
     persona = llm.general_prompt
@@ -553,9 +553,10 @@ async def entrypoint(ctx: JobContext):
         "call-center": "call-center.wav",
         "none": None  # no ambient sound
     }
+    logger.info("🌟 Ambient sound map initialized.",agentdb.ambient_sound)
 
     # Get ambient sound from agent API metadata
-    ambient_sound_key = agent.ambient_sound or "none"  # fallback to "none"
+    ambient_sound_key = agentdb.ambient_sound or "none"  # fallback to "none"
 
     # Resolve to actual audio config
     ambient_sound_value = AMBIENT_SOUND_MAP.get(ambient_sound_key, None)
