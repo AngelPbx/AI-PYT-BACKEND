@@ -238,7 +238,7 @@ class Assistant(Agent):
         pronunciations_test = {
             "API": "A P I", "book": "Boooooks", "SQL": "sequel"
         }
-        logging.info(f"⚠️⚠️⚠️ Pronunciations:{type(userdata.pronunciations)} {userdata.pronunciations}")
+        logging.info(f"⚠️⚠️⚠️ Pronunciations:{type(userdata.pronunciations)} {userdata.pronunciations}---------")
 
         async def adjust_pronunciation(input_text: AsyncIterable[str]) -> AsyncIterable[str]:
             async for chunk in input_text:
