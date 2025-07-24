@@ -381,7 +381,13 @@ async def entrypoint(ctx: JobContext):
     lkapi = api.LiveKitAPI()
     res = await lkapi.egress.start_room_composite_egress(req)
     
-    logging.info(f"Recording started: {res}")
+    recording_path = res.file_results[0].filename  # e.g., "livekit/call_recordings/2025-07-24T07-06-53/recording.ogg"
+    bucket = os.getenv("AWS_BUCKET")           # "ucaas-angelpbx"
+    region = os.getenv("AWS_DEFAULT_REGION")       # "us-east-2"
+
+    file_url = f"https://{bucket}.s3.{region}.amazonaws.com/{recording_path}"
+
+    logging.info(f"Recording URL: {file_url}")
     await lkapi.aclose()
 
 
