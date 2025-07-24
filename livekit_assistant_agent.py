@@ -380,12 +380,7 @@ async def entrypoint(ctx: JobContext):
 
     lkapi = api.LiveKitAPI()
     res = await lkapi.egress.start_room_composite_egress(req)
-    bucket = os.getenv('AWS_BUCKET')
-    region = os.getenv('AWS_DEFAULT_REGION')
-    access_key = os.getenv('AWS_ACCESS_KEY_ID')
-    secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
-
-    logging.info(f"S3 data: {bucket} {region} {access_key} {secret_key}")
+    
     logging.info(f"Recording started: {res}")
     await lkapi.aclose()
 
