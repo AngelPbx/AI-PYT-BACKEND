@@ -385,9 +385,9 @@ async def entrypoint(ctx: JobContext):
     bucket = os.getenv("AWS_BUCKET")           # "ucaas-angelpbx"
     region = os.getenv("AWS_DEFAULT_REGION")       # "us-east-2"
 
-    file_url = f"https://{bucket}.s3.{region}.amazonaws.com/{recording_path}"
+    call_recording_url = f"https://{bucket}.s3.{region}.amazonaws.com/{recording_path}"
 
-    logging.info(f"Recording URL: {file_url}")
+    logging.info(f"Recording URL: {call_recording_url}")
     await lkapi.aclose()
 
 
@@ -508,6 +508,8 @@ async def entrypoint(ctx: JobContext):
             ])
             web_call.updated_at = int(time.time() * 1000)
             web_call.call_status = "ended"
+            if call_recording_url:
+                web_call.recording_url = call_recording_url
             values = userdata.llm_token_usage["values"]
             userdata.llm_token_usage["average"] = (
                 sum(values) / len(values) if values else 0
