@@ -370,7 +370,7 @@ async def entrypoint(ctx: JobContext):
             file_type=api.EncodedFileType.OGG,
             filepath=f"livekit/call_recordings/{timestamp}/recording.ogg",
             s3=api.S3Upload(
-                bucket=os.getenv("S3_BUCKET_NAME"),
+                bucket=os.getenv("AWS_BUCKET"),
                 region=os.getenv("AWS_DEFAULT_REGION"),
                 access_key=os.getenv("AWS_ACCESS_KEY_ID"),
                 secret=os.getenv("AWS_SECRET_ACCESS_KEY"),
@@ -380,7 +380,7 @@ async def entrypoint(ctx: JobContext):
 
     lkapi = api.LiveKitAPI()
     res = await lkapi.egress.start_room_composite_egress(req)
-    bucket = os.getenv('S3_BUCKET_NAME')
+    bucket = os.getenv('AWS_BUCKET')
     region = os.getenv('AWS_DEFAULT_REGION')
     access_key = os.getenv('AWS_ACCESS_KEY_ID')
     secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
