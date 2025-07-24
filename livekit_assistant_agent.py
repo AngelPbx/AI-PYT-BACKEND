@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from dotenv import load_dotenv
 from sqlalchemy.orm import sessionmaker
 from openai import OpenAI
+from datetime import datetime
 from livekit import rtc, api
 from livekit.agents import metrics, MetricsCollectedEvent
 from livekit.agents import (
@@ -358,6 +359,30 @@ async def entrypoint(ctx: JobContext):
     #         f"I'm having trouble right now. Please try again. {ev.source}: {ev.error}",
     #         allow_interruptions=False,
     #     )
+
+
+    # Set up recording
+    timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+    req = api.RoomCompositeEgressRequest(
+        room_name=ctx.room.name,
+        audio_only=True,
+        file_outputs=[api.EncodedFileOutput(
+            file_type=api.EncodedFileType.OGG,
+            filepath=f"livekit/call_recordings/{timestamp}/recording.ogg",
+            s3=api.S3Upload(
+                bucket=os.getenv("S3_BUCKET_NAME"),
+                region=os.getenv("AWS_DEFAULT_REGION"),
+                access_key=os.getenv("AWS_ACCESS_KEY_ID"),
+                secret=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            ),
+        )],
+    )
+
+    lkapi = api.LiveKitAPI()
+    res = await lkapi.egress.start_room_composite_egress(req)
+    logging.info(f"Recording started: {res}")
+
+    await lkapi.aclose()
 
 
 
