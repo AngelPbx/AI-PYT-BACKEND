@@ -381,10 +381,6 @@ async def entrypoint(ctx: JobContext):
     lkapi = api.LiveKitAPI()
     res = await lkapi.egress.start_room_composite_egress(req)
     logging.info(f"Recording started: {res}")
-    res = await lkapi.egress.get_egress("EG_JFRnepWuVbCn")
-    logging.info(f"⚠️",res.status)
-    logging.info(f"⚠️⚠️",res.error)
-
 
     await lkapi.aclose()
 
