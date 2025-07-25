@@ -304,8 +304,8 @@ class Assistant(Agent):
             samples_per_channel=len(processed) // frame.num_channels,
         )   
     
-    @function_tool(name="end_call", description="Hang up the call")
-    async def end_call(ctx: RunContext):
+    @function_tool
+    async def end_call(self, ctx: RunContext):
         """Ends the call only if 'end_call' is in general_tools"""
 
         """Called when the user wants to end the call"""
@@ -315,7 +315,7 @@ class Assistant(Agent):
 
         # Speak a goodbye message (optional: fetch from metadata)
         description = "Okay sir, I am ending this call now."  # or fetch from ctx.session.user_data
-        await ctx.say(description)
+        await ctx.session.say(description)
             # Wait for playout
         if ctx.session.current_speech:
             await ctx.session.current_speech.wait_for_playout()
