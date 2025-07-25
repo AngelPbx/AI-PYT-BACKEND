@@ -74,11 +74,21 @@ def build_stt(s2s_model: str = None, language: str = None, boosted_keywords: Opt
         return openai.STT(language=language)
     elif "deepgram" in s2s_model:
         return deepgram.STT(
-        model="general",  # ✅ fallback to general model
-        keywords=[("LiveKit", 1.5)],
-        language=language
+        model="general",
+        language=language,
+        interim_results=True,      # Speed: stream as it hears
+        punctuate=True,            # Accuracy: adds ., ? etc.
+        smart_format=True,         # Normalizes: 1st Jan, $10
+        numerals=True,             # Converts: "ten" -> "10"
+        sample_rate=16000,
+        no_delay=True,             # Fast response with smart_format
+        endpointing_ms=25,         # Tuned for fast speech end detection
+        filler_words=True,         # Backchanneling: "uh", "yeah"
+        keywords=[("LiveKit", 1.5)],  # Accuracy boost
+        profanity_filter=False,
+        mip_opt_out=True           # Opt-out of model training (optional)
     )
-        # return deepgram.STT(model=s2s_model)
+       
     else:
         # Default to Whisper as fallback
         return openai.STT(language=language)
