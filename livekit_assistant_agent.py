@@ -180,6 +180,7 @@ class UserData:
     persona: str
     begin_message: Optional[str] = None
     ctx: Optional[JobContext] = None
+    general_tools: Optional[List[dict]] = field(default_factory=list)
     start_timestamp: Optional[int] = None
     retrieved_file_paths: List[dict] = None
     pronunciations: dict = field(default_factory=dict)
@@ -309,12 +310,20 @@ class Assistant(Agent):
         """Ends the call only if 'end_call' is in general_tools"""
 
         """Called when the user wants to end the call"""
+        # Get tools list from session.user_data
+        logger.info("🔚 Ending call..📞📞-",ctx.session.user_data)
+        tools = getattr(ctx.session.user_data, "general_tools", [])
+        end_call_tool = next((t for t in tools if t.get("name") == "end_call"), None)
+
+        # If not defined in general_tools, skip execution
+        if not end_call_tool:
+            return
         current_speech = ctx.session.current_speech
         if current_speech:
             await current_speech.wait_for_playout()
 
         # Speak a goodbye message (optional: fetch from metadata)
-        description = "Okay sir, I am ending this call now."  # or fetch from ctx.session.user_data
+        description = end_call_tool.get("description")
         await ctx.session.say(description)
             # Wait for playout
         if ctx.session.current_speech:
@@ -350,10 +359,11 @@ async def entrypoint(ctx: JobContext):
     llm_plugin = build_llm(llm)
     begin_message=llm.begin_message
     persona = llm.general_prompt
+    general_tools=llm.general_tools or [],
     kb_ids = llm.knowledge_base_ids or []
     # kb_id = kb_ids[0] if kb_ids else None
 
-    userdata = UserData(kb_ids=kb_ids, persona=persona,begin_message=begin_message ,pronunciations =pronunciations ,ctx=ctx)
+    userdata = UserData(kb_ids=kb_ids,general_tools=general_tools, persona=persona,begin_message=begin_message ,pronunciations =pronunciations ,ctx=ctx)
 
 
     session = AgentSession(
