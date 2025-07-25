@@ -314,11 +314,18 @@ class Assistant(Agent):
         # Get tools list from session.user_data
         logger.info("🔚 Ending call..📞📞-",userdata)
         tools = getattr(userdata, "general_tools", [])
+
+        # FIX: Unpack if it's a tuple like ([{...}],)
+        if isinstance(tools, tuple):
+            tools = tools[0]
+
         end_call_tool = next((t for t in tools if t.get("name") == "end_call"), None)
 
         # If not defined in general_tools, skip execution
         if not end_call_tool:
+            await ctx.session.say("Soory, I cannot end the call right now.")
             return
+        
         current_speech = ctx.session.current_speech
         if current_speech:
             await current_speech.wait_for_playout()
