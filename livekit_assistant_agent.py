@@ -62,7 +62,7 @@ def get_agent_and_llm(agent_id: str):
     finally:
         db.close()
 
-def build_stt(s2s_model: str = None, language: str = "en"):
+def build_stt(s2s_model: str = None, language: str = None):
     """Dynamically build STT engine based on model"""
     # Fallback to whisper if s2s_model is None
     if not s2s_model:
@@ -75,7 +75,7 @@ def build_stt(s2s_model: str = None, language: str = "en"):
     elif "deepgram" in s2s_model:
         return deepgram.STT(
         model="general",  # ✅ fallback to general model
-        language="en-US"
+        language=language
     )
         # return deepgram.STT(model=s2s_model)
     else:
@@ -340,15 +340,6 @@ class Assistant(Agent):
         # Hang up the call
         await hangup_call()
 
-    # @function_tool  
-    # async def end_call(self, ctx: RunContext):
-    #     """Called when the user wants to end the call"""
-    #     # let the agent finish speaking
-    #     current_speech = ctx.session.current_speech
-    #     if current_speech:
-    #         await current_speech.wait_for_playout()
-
-    #     await hangup_call()
    
     @function_tool
     async def transfer_to_human(self):       
@@ -362,7 +353,7 @@ async def entrypoint(ctx: JobContext):
    
     agentdb, llm, pronunciations  = get_agent_and_llm(agent_id)
 
-    stt = build_stt(llm.s2s_model, language=agentdb.language or "en")
+    stt = build_stt(llm.s2s_model, language=agentdb.language)
     tts = build_tts(agentdb)
     llm_plugin = build_llm(llm)
     begin_message=llm.begin_message
