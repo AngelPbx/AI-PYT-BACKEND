@@ -62,7 +62,7 @@ def get_agent_and_llm(agent_id: str):
     finally:
         db.close()
 
-def build_stt(s2s_model: str = None, language: str = None):
+def build_stt(s2s_model: str = None, language: str = None, boosted_keywords: Optional[List[str]] = None):
     """Dynamically build STT engine based on model"""
     # Fallback to whisper if s2s_model is None
     if not s2s_model:
@@ -75,6 +75,7 @@ def build_stt(s2s_model: str = None, language: str = None):
     elif "deepgram" in s2s_model:
         return deepgram.STT(
         model="general",  # ✅ fallback to general model
+        keywords=[("LiveKit", 1.5)],
         language=language
     )
         # return deepgram.STT(model=s2s_model)
@@ -312,7 +313,6 @@ class Assistant(Agent):
         """Called when the user wants to end the call"""
         userdata: UserData = self.session.userdata 
         # Get tools list from session.user_data
-        logger.info("🔚 Ending call..📞📞-",userdata)
         tools = getattr(userdata, "general_tools", [])
 
         # FIX: Unpack if it's a tuple like ([{...}],)
@@ -353,15 +353,14 @@ async def entrypoint(ctx: JobContext):
    
     agentdb, llm, pronunciations  = get_agent_and_llm(agent_id)
 
-    stt = build_stt(llm.s2s_model, language=agentdb.language)
+    stt = build_stt(llm.s2s_model, language=agentdb.language, boosted_keywords=agentdb.boosted_keywords)
     tts = build_tts(agentdb)
     llm_plugin = build_llm(llm)
     begin_message=llm.begin_message
     persona = llm.general_prompt
     general_tools=llm.general_tools or [],
     kb_ids = llm.knowledge_base_ids or []
-    # kb_id = kb_ids[0] if kb_ids else None
-
+  
     userdata = UserData(kb_ids=kb_ids,general_tools=general_tools, persona=persona,begin_message=begin_message ,pronunciations =pronunciations ,ctx=ctx)
 
 
@@ -409,9 +408,9 @@ async def entrypoint(ctx: JobContext):
     lkapi = api.LiveKitAPI()
     res = await lkapi.egress.start_room_composite_egress(req)
     
-    recording_path = res.file_results[0].filename  # e.g., "livekit/call_recordings/2025-07-24T07-06-53/recording.ogg"
-    bucket = os.getenv("AWS_BUCKET")           # "ucaas-angelpbx"
-    region = os.getenv("AWS_DEFAULT_REGION")       # "us-east-2"
+    recording_path = res.file_results[0].filename  
+    bucket = os.getenv("AWS_BUCKET")           
+    region = os.getenv("AWS_DEFAULT_REGION")       
 
     call_recording_url = f"https://{bucket}.s3.{region}.amazonaws.com/{recording_path}"
 
