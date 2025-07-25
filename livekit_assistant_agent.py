@@ -310,9 +310,10 @@ class Assistant(Agent):
         """Ends the call only if 'end_call' is in general_tools"""
 
         """Called when the user wants to end the call"""
+        userdata: UserData = self.session.userdata 
         # Get tools list from session.user_data
-        logger.info("🔚 Ending call..📞📞-",ctx.session.user_data)
-        tools = getattr(ctx.session.user_data, "general_tools", [])
+        logger.info("🔚 Ending call..📞📞-",userdata)
+        tools = getattr(userdata, "general_tools", [])
         end_call_tool = next((t for t in tools if t.get("name") == "end_call"), None)
 
         # If not defined in general_tools, skip execution
